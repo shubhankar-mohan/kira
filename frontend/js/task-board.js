@@ -89,14 +89,22 @@ class TaskBoardManager {
             }
         }, { passive: false });
 
-        // Handle touch events for mobile devices
+        // Enhanced touch handling for mobile devices
         let touchStartX = 0;
         let touchStartY = 0;
+        let touchStartTime = 0;
+        let isTouchScrolling = false;
+        let touchScrollDirection = null;
+        let initialScrollLeft = 0;
 
         this.boardContainer.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
                 touchStartX = e.touches[0].clientX;
                 touchStartY = e.touches[0].clientY;
+                touchStartTime = Date.now();
+                isTouchScrolling = false;
+                touchScrollDirection = null;
+                initialScrollLeft = this.boardContainer.scrollLeft;
             }
         }, { passive: true });
 
@@ -106,15 +114,55 @@ class TaskBoardManager {
                 const touchY = e.touches[0].clientY;
                 const deltaX = touchStartX - touchX;
                 const deltaY = touchStartY - touchY;
+                const absDeltaX = Math.abs(deltaX);
+                const absDeltaY = Math.abs(deltaY);
                 
-                // Only handle horizontal touch gestures
-                if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+                // Determine scroll direction on first significant movement
+                if (!touchScrollDirection && (absDeltaX > 5 || absDeltaY > 5)) {
+                    touchScrollDirection = absDeltaX > absDeltaY ? 'horizontal' : 'vertical';
+                }
+                
+                // Handle horizontal scrolling with improved logic
+                if (touchScrollDirection === 'horizontal' && absDeltaX > 5) {
                     e.preventDefault();
-                    this.boardContainer.scrollLeft += deltaX;
-                    touchStartX = touchX;
+                    e.stopPropagation();
+                    isTouchScrolling = true;
+                    
+                    // Smooth scrolling with momentum
+                    const scrollAmount = deltaX * 1.2; // Slight amplification for better feel
+                    this.boardContainer.scrollLeft = initialScrollLeft + (touchStartX - touchX) * 1.2;
+                } else if (touchScrollDirection === 'vertical') {
+                    // Allow normal page scrolling for vertical gestures
+                    isTouchScrolling = false;
                 }
             }
         }, { passive: false });
+        
+        // Add touchend handler for momentum and cleanup
+        this.boardContainer.addEventListener('touchend', (e) => {
+            if (isTouchScrolling) {
+                const touchEndTime = Date.now();
+                const touchDuration = touchEndTime - touchStartTime;
+                
+                // Add momentum scrolling for quick swipes
+                if (touchDuration < 300) {
+                    const velocity = (touchStartX - e.changedTouches[0].clientX) / touchDuration;
+                    if (Math.abs(velocity) > 0.5) {
+                        const momentum = velocity * 150; // Momentum factor
+                        const targetScrollLeft = this.boardContainer.scrollLeft + momentum;
+                        
+                        this.boardContainer.scrollTo({
+                            left: Math.max(0, Math.min(targetScrollLeft, this.boardContainer.scrollWidth - this.boardContainer.clientWidth)),
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            }
+            
+            // Reset touch state
+            isTouchScrolling = false;
+            touchScrollDirection = null;
+        }, { passive: true });
 
         // Prevent page scroll when scrolling horizontally on the board
         this.boardContainer.addEventListener('scroll', (e) => {
@@ -134,8 +182,9 @@ class TaskBoardManager {
         // Removed expand functionality - cards are now flexible height
     }
 
-    // Setup drag and drop functionality
+    // Setup enhanced drag and drop functionality with touch support
     setupDragAndDrop() {
+        // Traditional drag and drop for desktop
         document.addEventListener('dragstart', (e) => {
             if (e.target.classList.contains('task-card')) {
                 e.target.classList.add('dragging');
@@ -175,6 +224,152 @@ class TaskBoardManager {
                 }
             }
         });
+        
+        // Enhanced touch-based drag and drop
+        this.setupTouchDragAndDrop();
+    }
+    
+    // Setup touch-based drag and drop
+    setupTouchDragAndDrop() {
+        let draggedCard = null;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        let isDragging = false;
+        let dragPreview = null;
+        let longPressTimer = null;
+        let touchMoved = false;
+        
+        // Helper function to create drag preview
+        const createDragPreview = (originalCard) => {
+            const preview = originalCard.cloneNode(true);
+            preview.classList.add('touch-drag-preview');
+            preview.style.position = 'fixed';
+            preview.style.pointerEvents = 'none';
+            preview.style.zIndex = '9999';
+            preview.style.transform = 'rotate(5deg) scale(1.05)';
+            preview.style.opacity = '0.9';
+            preview.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+            document.body.appendChild(preview);
+            return preview;
+        };
+        
+        // Helper function to update drag preview position
+        const updateDragPreview = (x, y) => {
+            if (dragPreview) {
+                dragPreview.style.left = (x - dragOffsetX) + 'px';
+                dragPreview.style.top = (y - dragOffsetY) + 'px';
+            }
+        };
+        
+        // Helper function to get column under point
+        const getColumnUnderPoint = (x, y) => {
+            const elements = document.elementsFromPoint(x, y);
+            return elements.find(el => el.classList.contains('column'));
+        };
+        
+        // Touch start handler
+        document.addEventListener('touchstart', (e) => {
+            const taskCard = e.target.closest('.task-card');
+            if (!taskCard) return;
+            
+            // Prevent touch scrolling conflicts
+            if (e.touches.length !== 1) return;
+            
+            const touch = e.touches[0];
+            draggedCard = taskCard;
+            dragStartX = touch.clientX;
+            dragStartY = touch.clientY;
+            touchMoved = false;
+            
+            // Calculate offset from touch point to card center
+            const rect = taskCard.getBoundingClientRect();
+            dragOffsetX = touch.clientX - rect.left;
+            dragOffsetY = touch.clientY - rect.top;
+            
+            // Start long press timer for drag initiation
+            longPressTimer = setTimeout(() => {
+                if (!touchMoved && draggedCard) {
+                    isDragging = true;
+                    draggedCard.classList.add('touch-dragging');
+                    dragPreview = createDragPreview(draggedCard);
+                    updateDragPreview(touch.clientX, touch.clientY);
+                    
+                    // Provide haptic feedback if available
+                    if (navigator.vibrate) {
+                        navigator.vibrate(50);
+                    }
+                }
+            }, 200); // 200ms long press
+            
+        }, { passive: true });
+        
+        // Touch move handler
+        document.addEventListener('touchmove', (e) => {
+            if (!draggedCard) return;
+            
+            const touch = e.touches[0];
+            const moveX = Math.abs(touch.clientX - dragStartX);
+            const moveY = Math.abs(touch.clientY - dragStartY);
+            
+            // Track if touch has moved significantly
+            if (moveX > 10 || moveY > 10) {
+                touchMoved = true;
+                
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            }
+            
+            if (isDragging) {
+                e.preventDefault();
+                updateDragPreview(touch.clientX, touch.clientY);
+                
+                // Highlight drop zones
+                const column = getColumnUnderPoint(touch.clientX, touch.clientY);
+                document.querySelectorAll('.column').forEach(col => {
+                    col.classList.remove('touch-drag-over');
+                });
+                if (column && column !== draggedCard.closest('.column')) {
+                    column.classList.add('touch-drag-over');
+                }
+            }
+        }, { passive: false });
+        
+        // Touch end handler
+        document.addEventListener('touchend', (e) => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            
+            if (isDragging && draggedCard) {
+                const touch = e.changedTouches[0];
+                const targetColumn = getColumnUnderPoint(touch.clientX, touch.clientY);
+                
+                if (targetColumn && targetColumn !== draggedCard.closest('.column')) {
+                    this.handleTaskDrop(draggedCard.dataset.taskId, targetColumn);
+                }
+                
+                // Clean up
+                if (dragPreview) {
+                    dragPreview.remove();
+                    dragPreview = null;
+                }
+                
+                draggedCard.classList.remove('touch-dragging');
+                document.querySelectorAll('.column').forEach(col => {
+                    col.classList.remove('touch-drag-over');
+                });
+            }
+            
+            // Reset state
+            isDragging = false;
+            draggedCard = null;
+            touchMoved = false;
+        }, { passive: true });
     }
 
     // Handle task drop
@@ -477,8 +672,14 @@ class TaskBoardManager {
                     ${sprintWeek ? `<span class="sprint-week sprint-${this.getSprintClass(sprintWeek)}">${sprintWeek}</span>` : ''}
                 </div>
                 <div class="task-actions">
-                    <button class="action-btn" title="View" onclick="openTaskDetails('${task.id}')">👁</button>
-                    <button class="action-btn" title="Edit" onclick="editTask('${task.id}')">✏</button>
+                    <button class="action-btn touch-target" title="View" onclick="openTaskDetails('${task.id}')" aria-label="View task details">
+                        <span class="action-icon">👁</span>
+                        <span class="action-text">View</span>
+                    </button>
+                    <button class="action-btn touch-target" title="Edit" onclick="editTask('${task.id}')" aria-label="Edit task">
+                        <span class="action-icon">✏</span>
+                        <span class="action-text">Edit</span>
+                    </button>
                 </div>
             </div>
             <div class="task-title">${this.escapeHtml(task.task || 'Untitled Task')}</div>
