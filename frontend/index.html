@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kira Task Manager</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" href="css/task-board.css">
+</head>
+<body>
+    <!-- Login Form -->
+    <div id="loginForm" class="login-container">
+        <div class="login-card">
+            <div class="logo-section">
+                <span class="logo-icon">🏪</span>
+                <h1 class="app-title">Kira Task Manager</h1>
+                <p class="app-subtitle">Your team's productivity hub</p>
+            </div>
+
+            <form id="loginFormElement">
+                <div class="form-group">
+                    <label for="username">Email Address</label>
+                    <input 
+                        type="email" 
+                        id="username" 
+                        class="form-input" 
+                        placeholder="Enter your email"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        class="form-input" 
+                        placeholder="Enter your password"
+                        required
+                    >
+                </div>
+
+                <button type="button" class="login-button" id="loginButton">
+                    Sign In to Kira
+                </button>
+            </form>
+
+            <div class="loading" id="loginLoading">
+                <div class="spinner"></div>
+                <span>Signing you in...</span>
+            </div>
+
+            <div class="error-message" id="loginErrorMessage"></div>
+            <div class="success-message" id="loginSuccessMessage"></div>
+
+            <div class="demo-accounts">
+                <h4>👤 Demo Accounts</h4>
+                <div class="demo-account" onclick="fillDemoCredentials('admin@kirana.club', 'admin123')">
+                    <span class="role">Admin</span>
+                    <span class="credentials">admin@kirana.club / admin123</span>
+                </div>
+                <div class="demo-account" onclick="fillDemoCredentials('manager@kirana.club', 'manager123')">
+                    <span class="role">Manager</span>
+                    <span class="credentials">manager@kirana.club / manager123</span>
+                </div>
+                <div class="demo-account" onclick="fillDemoCredentials('dev@kirana.club', 'dev123')">
+                    <span class="role">Developer</span>
+                    <span class="credentials">dev@kirana.club / dev123</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="main-app hidden">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-top">
+                <div class="logo">
+                    <span class="logo-icon">🏪</span>
+                    <span>KiranaClub Task Manager</span>
+                </div>
+                <div class="header-actions">
+                    <input type="text" class="search-box" placeholder="Search tasks, people, or keywords...">
+                    <button class="btn btn-secondary">Filter</button>
+                    <button class="btn btn-secondary" onclick="syncData()">🔄 Sync</button>
+                    <button class="btn" onclick="showCreateTaskModal()">+ New Task</button>
+                </div>
+                <!-- User Profile in Header -->
+                <div class="header-profile">
+                    <div class="profile-menu">
+                        <button class="profile-button" onclick="toggleProfileMenu()">
+                            <div class="profile-avatar" id="profileAvatar">U</div>
+                            <div class="profile-info">
+                                <div class="profile-name" id="profileName">User</div>
+                                <div class="profile-role" id="profileRole">user</div>
+                            </div>
+                            <div class="profile-chevron">▼</div>
+                        </button>
+                        <div class="profile-dropdown">
+                            <div class="profile-dropdown-content">
+                                <div class="profile-section">
+                                    <div class="profile-menu-item">
+                                        <span class="profile-menu-icon">👤</span>
+                                        Profile Settings
+                                    </div>
+                                    <div class="profile-menu-item">
+                                        <span class="profile-menu-icon">⚙️</span>
+                                        Preferences
+                                    </div>
+                                </div>
+                                <div class="profile-section">
+                                    <div class="profile-menu-item danger" onclick="logout()">
+                                        <span class="profile-menu-icon">🚪</span>
+                                        Sign Out
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="breadcrumb">
+                <span id="breadcrumbPath">Dashboard</span>
+            </div>
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <button class="filter-btn">🔍 Quick Filters</button>
+                    <button class="view-btn">📋 Board View</button>
+                    <button class="view-btn">📊 By Status</button>
+                </div>
+                <div>
+                    <button class="btn btn-secondary">Export</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <div class="sidebar" id="sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">Navigation</div>
+                    <div class="nav-item active" data-section="dashboard" onclick="navigateTo('dashboard')">
+                        <span class="nav-item-icon">📊</span>
+                        Dashboard
+                    </div>
+                    <div class="nav-item" data-section="board" onclick="navigateTo('board')">
+                        <span class="nav-item-icon">📋</span>
+                        Task Board
+                    </div>
+                    <div class="nav-item" data-section="sprints" onclick="navigateTo('sprints')">
+                        <span class="nav-item-icon">🏃</span>
+                        Sprints
+                    </div>
+                    <div class="nav-item" id="userManagementNav" data-section="users" onclick="navigateTo('users')">
+                        <span class="nav-item-icon">👥</span>
+                        Team
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Page content will be loaded here -->
+                <div id="pageContent" class="content-section">
+                    <!-- Dashboard Section -->
+                    <div id="dashboardSection" class="page-section">
+                        <div class="section-header">
+                            <h2>Dashboard</h2>
+                        </div>
+                        <div class="dashboard-content">
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-icon">📋</div>
+                                    <div class="stat-number" id="totalTasks">0</div>
+                                    <div class="stat-label">Total Tasks</div>
+                                    <div class="stat-description">All tasks in the system</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon">🏃</div>
+                                    <div class="stat-number" id="inProgressTasks">0</div>
+                                    <div class="stat-label">In Progress</div>
+                                    <div class="stat-description">Currently being worked on</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon">✅</div>
+                                    <div class="stat-number" id="completedTasks">0</div>
+                                    <div class="stat-label">Completed</div>
+                                    <div class="stat-description">Successfully finished</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon">🚫</div>
+                                    <div class="stat-number" id="blockedTasks">0</div>
+                                    <div class="stat-label">Blocked</div>
+                                    <div class="stat-description">Waiting for resolution</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Task Board Section -->
+                    <div id="boardSection" class="page-section hidden">
+                        <div class="section-header">
+                            <h2>Task Board</h2>
+                        </div>
+                        
+                        <!-- Task Board Filters -->
+                        <div class="board-filters">
+                            <div class="filter-group">
+                                <label>Sprint</label>
+                                <div class="multiselect-container">
+                                    <div class="multiselect-display" onclick="toggleMultiselect('sprintFilter')">
+                                        <span class="multiselect-text">All Sprints</span>
+                                        <span class="multiselect-arrow">▼</span>
+                                    </div>
+                                    <div class="multiselect-dropdown" id="sprintFilterDropdown">
+                                        <div class="multiselect-option" data-value="all">
+                                            <input type="checkbox" id="sprint-all" checked>
+                                            <label for="sprint-all">All Sprints</label>
+                                        </div>
+                                        <!-- Sprint options will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>Assigned To</label>
+                                <div class="multiselect-container">
+                                    <div class="multiselect-display" onclick="toggleMultiselect('assigneeFilter')">
+                                        <span class="multiselect-text">All Assignees</span>
+                                        <span class="multiselect-arrow">▼</span>
+                                    </div>
+                                    <div class="multiselect-dropdown" id="assigneeFilterDropdown">
+                                        <div class="multiselect-option" data-value="all">
+                                            <input type="checkbox" id="assignee-all" checked>
+                                            <label for="assignee-all">All Assignees</label>
+                                        </div>
+                                        <!-- Assignee options will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>Assigned By</label>
+                                <div class="multiselect-container">
+                                    <div class="multiselect-display" onclick="toggleMultiselect('assignedByFilter')">
+                                        <span class="multiselect-text">All Creators</span>
+                                        <span class="multiselect-arrow">▼</span>
+                                    </div>
+                                    <div class="multiselect-dropdown" id="assignedByFilterDropdown">
+                                        <div class="multiselect-option" data-value="all">
+                                            <input type="checkbox" id="assignedBy-all" checked>
+                                            <label for="assignedBy-all">All Creators</label>
+                                        </div>
+                                        <!-- Creator options will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>Priority</label>
+                                <div class="multiselect-container">
+                                    <div class="multiselect-display" onclick="toggleMultiselect('priorityFilter')">
+                                        <span class="multiselect-text">All Priorities</span>
+                                        <span class="multiselect-arrow">▼</span>
+                                    </div>
+                                    <div class="multiselect-dropdown" id="priorityFilterDropdown">
+                                        <div class="multiselect-option" data-value="all">
+                                            <input type="checkbox" id="priority-all" checked>
+                                            <label for="priority-all">All Priorities</label>
+                                        </div>
+                                        <div class="multiselect-option" data-value="P0">
+                                            <input type="checkbox" id="priority-P0">
+                                            <label for="priority-P0">P0 - Critical</label>
+                                        </div>
+                                        <div class="multiselect-option" data-value="P1">
+                                            <input type="checkbox" id="priority-P1">
+                                            <label for="priority-P1">P1 - High</label>
+                                        </div>
+                                        <div class="multiselect-option" data-value="P2">
+                                            <input type="checkbox" id="priority-P2">
+                                            <label for="priority-P2">P2 - Medium</label>
+                                        </div>
+                                        <div class="multiselect-option" data-value="Backlog">
+                                            <input type="checkbox" id="priority-Backlog">
+                                            <label for="priority-Backlog">Backlog</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="filter-actions">
+                                <button class="btn btn-secondary" onclick="clearAllFilters()">Clear All</button>
+                                <button class="btn" onclick="applyFilters()">Apply Filters</button>
+                            </div>
+                        </div>
+                        
+                        <div class="main-container">
+                            <div class="board-container" id="boardContainer">
+                                <!-- Task board will be rendered here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sprints Section -->
+                    <div id="sprintsSection" class="page-section hidden">
+                        <div class="section-header">
+                            <h2>Sprints</h2>
+                            <button class="btn" onclick="showCreateSprintModal()">+ New Sprint</button>
+                        </div>
+                        <div id="sprintsContent">
+                            <!-- Sprints will be rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- Users Section -->
+                    <div id="usersSection" class="page-section hidden">
+                        <div class="section-header">
+                            <h2>Team</h2>
+                            <button class="btn" onclick="showCreateUserModal()">+ New User</button>
+                        </div>
+                        <div id="usersContent">
+                            <!-- Users will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="loading-indicator hidden">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading...</div>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification"></div>
+
+    <!-- Modals -->
+    <div id="createTaskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Task</h3>
+                <button class="modal-close" onclick="closeModal('createTaskModal')">&times;</button>
+            </div>
+            <form id="createTaskForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="taskTitle">Task Title</label>
+                        <input type="text" id="taskTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskAssignee">Assigned To</label>
+                        <select id="taskAssignee" required>
+                            <option value="">Select assignee</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskPriority">Priority</label>
+                        <select id="taskPriority" required>
+                            <option value="P0">P0 - Critical</option>
+                            <option value="P1">P1 - High</option>
+                            <option value="P2">P2 - Medium</option>
+                            <option value="Backlog">Backlog</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskType">Type</label>
+                        <select id="taskType" required>
+                            <option value="Feature">Feature</option>
+                            <option value="Bug">Bug</option>
+                            <option value="Improvement">Improvement</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskSprint">Sprint</label>
+                        <select id="taskSprint">
+                            <option value="">No Sprint</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="taskDescription">Description</label>
+                    <textarea id="taskDescription" rows="4"></textarea>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('createTaskModal')">Cancel</button>
+                <button class="btn" onclick="createTask()">Create Task</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="createSprintModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Sprint</h3>
+                <button class="modal-close" onclick="closeModal('createSprintModal')">&times;</button>
+            </div>
+            <form id="createSprintForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="sprintName">Sprint Name</label>
+                        <input type="text" id="sprintName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sprintStartDate">Start Date</label>
+                        <input type="date" id="sprintStartDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sprintEndDate">End Date</label>
+                        <input type="date" id="sprintEndDate" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="sprintGoal">Sprint Goal</label>
+                    <textarea id="sprintGoal" rows="3"></textarea>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('createSprintModal')">Cancel</button>
+                <button class="btn" onclick="createSprint()">Create Sprint</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="createUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New User</h3>
+                <button class="modal-close" onclick="closeModal('createUserModal')">&times;</button>
+            </div>
+            <form id="createUserForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="userName">Name</label>
+                        <input type="text" id="userName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="userEmail">Email</label>
+                        <input type="email" id="userEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="userRole">Role</label>
+                        <select id="userRole" required>
+                            <option value="Developer">Developer</option>
+                            <option value="Manager">Manager</option>
+                            <option value="Admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="userPassword">Password</label>
+                        <input type="password" id="userPassword" required>
+                    </div>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
+                <button class="btn" onclick="createUser()">Create User</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/task-board.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

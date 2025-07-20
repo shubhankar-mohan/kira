@@ -1,0 +1,39 @@
+# Node.js dependencies
+/backend/node_modules/
+/backend/package-lock.json
+
+# Environment files
+/backend/.env
+
+# Logs
+/backend/logs/
+*.log
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+
+# Google Cloud credentials
+*.json
+service-account-key.json
+google-credentials.json
+
+# Backup files
+*.backup
+*.bak
