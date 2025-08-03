@@ -8,7 +8,7 @@ class TaskBoardManager {
     constructor() {
         this.boardContainer = document.getElementById('boardContainer');
         this.statusConfig = [
-            { key: 'Not started', label: 'TO DO', class: 'todo' },
+            { key: 'Not started', label: 'NOT STARTED', class: 'todo' },
             { key: 'In progress', label: 'IN PROGRESS', class: 'in-progress' },
             { key: 'Dev Testing', label: 'DEV TESTING', class: 'dev-testing' },
             { key: 'Product Testing', label: 'PRODUCT TESTING', class: 'product-testing' },
@@ -607,11 +607,16 @@ class TaskBoardManager {
         const dropdown = document.getElementById(filterId + 'Dropdown');
         if (!dropdown) return;
 
-        // Keep the "All" option
+        // Keep the "All" option and get its current state
         const allOption = dropdown.querySelector('[data-value="all"]');
+        const allOptionHtml = allOption ? allOption.outerHTML : '';
+        
+        // Clear dropdown
         dropdown.innerHTML = '';
-        if (allOption) {
-            dropdown.appendChild(allOption);
+        
+        // Re-add the "All" option if it existed
+        if (allOptionHtml) {
+            dropdown.innerHTML = allOptionHtml;
         }
 
         // Add options
@@ -620,9 +625,10 @@ class TaskBoardManager {
             optionElement.className = 'multiselect-option';
             optionElement.dataset.value = option;
             
+            const safeId = `${filterId}-${option.replace(/\s+/g, '-').replace(/[^\w-]/g, '')}`;
             optionElement.innerHTML = `
-                <input type="checkbox" id="${filterId}-${option.replace(/\s+/g, '-')}">
-                <label for="${filterId}-${option.replace(/\s+/g, '-')}">${option}</label>
+                <input type="checkbox" id="${safeId}" data-filter="true">
+                <label for="${safeId}">${option}</label>
             `;
             
             dropdown.appendChild(optionElement);
@@ -672,17 +678,17 @@ class TaskBoardManager {
                     ${sprintWeek ? `<span class="sprint-week sprint-${this.getSprintClass(sprintWeek)}">${sprintWeek}</span>` : ''}
                 </div>
                 <div class="task-actions">
-                    <button class="action-btn touch-target" title="View" onclick="openTaskDetails('${task.id}')" aria-label="View task details">
+                    <button class="action-btn touch-target" title="View" data-action="openTaskDetails" data-task-id="${task.id}" aria-label="View task details">
                         <span class="action-icon">👁</span>
                         <span class="action-text">View</span>
                     </button>
-                    <button class="action-btn touch-target" title="Edit" onclick="editTask('${task.id}')" aria-label="Edit task">
+                    <button class="action-btn touch-target" title="Edit" data-action="editTask" data-task-id="${task.id}" aria-label="Edit task">
                         <span class="action-icon">✏</span>
                         <span class="action-text">Edit</span>
                     </button>
                 </div>
             </div>
-            <div class="task-title">${this.escapeHtml(task.task || 'Untitled Task')}</div>
+            <div class="task-title" data-action="openTaskDetails" data-task-id="${task.id}" style="cursor: pointer;">${this.escapeHtml(task.task || 'Untitled Task')}</div>
             <div class="task-tags-section">
                 ${task.priority ? `<span class="task-tag priority-${task.priority.toLowerCase()}">${task.priority}</span>` : ''}
                 ${task.type ? `<span class="task-tag type-${task.type.toLowerCase()}">${task.type}</span>` : ''}
@@ -697,6 +703,14 @@ class TaskBoardManager {
                 </div>
             ` : ''}
         `;
+
+        // Add click handler to the entire card (excluding action buttons)
+        card.addEventListener('click', (e) => {
+            // Don't open details if clicking on action buttons
+            if (!e.target.closest('.task-actions') && !e.target.closest('.action-btn')) {
+                openTaskDetails(task.id);
+            }
+        });
 
         return card;
     }
@@ -805,8 +819,10 @@ function showCreateTaskModal() {
 
 // Global filter functions
 function toggleMultiselect(filterId) {
-    const container = document.querySelector(`[onclick="toggleMultiselect('${filterId}')"]`).parentElement;
+    const container = document.querySelector(`[data-filter-id="${filterId}"]`).parentElement;
     const dropdown = document.getElementById(filterId + 'Dropdown');
+    
+    if (!container || !dropdown) return; // Skip if elements not found
     
     // Close all other dropdowns
     document.querySelectorAll('.multiselect-container').forEach(cont => {
@@ -858,7 +874,22 @@ function getSelectedValues(filterId) {
     if (!dropdown) return [];
     
     const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]:checked');
-    return Array.from(checkboxes).map(cb => cb.id.replace(filterId + '-', ''));
+    return Array.from(checkboxes).map(cb => {
+        // Handle the special "all" case
+        if (cb.id.endsWith('-all')) {
+            return 'all';
+        }
+        // Extract the value from the checkbox ID
+        const prefix = filterId + '-';
+        let value = cb.id.replace(prefix, '');
+        // Handle special cases like priority values
+        if (filterId === 'priorityFilter') {
+            if (value.startsWith('priority-')) {
+                value = value.replace('priority-', '');
+            }
+        }
+        return value;
+    });
 }
 
 function clearAllFilters() {
@@ -891,7 +922,9 @@ function updateFilterDisplayText() {
     const filterTypes = ['sprintFilter', 'assigneeFilter', 'assignedByFilter', 'priorityFilter'];
     
     filterTypes.forEach(filterId => {
-        const display = document.querySelector(`[onclick="toggleMultiselect('${filterId}')"] .multiselect-text`);
+        const display = document.querySelector(`[data-filter-id="${filterId}"] .multiselect-text`);
+        if (!display) return; // Skip if element not found
+        
         const selectedValues = getSelectedValues(filterId);
         
         if (selectedValues.includes('all') || selectedValues.length === 0) {

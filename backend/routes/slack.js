@@ -61,14 +61,20 @@ router.post('/commands', verifySlackRequest, async (req, res) => {
 
     if (command === '/kira') {
         try {
-            await slackService.handleSlashCommand({
+            const commandData = {
                 text,
                 user_id,
-                channel_id
-            }, async (response) => {
+                channel_id,
+                response_url
+            };
+            
+            const respond = (response) => {
                 res.json(response);
-            }, slackService.client);
+            };
+            
+            await slackService.handleSlashCommand(commandData, respond, slackService.client);
         } catch (error) {
+            console.error('Slash command error:', error);
             res.json({
                 text: '❌ Error processing command. Please try again.',
                 response_type: 'ephemeral'
@@ -150,7 +156,7 @@ async function handleTaskAssign(taskId, user, channel) {
 // Legacy notification endpoints (maintained for backward compatibility)
 router.post('/notify', authenticateToken, async (req, res) => {
     try {
-        const { message, channel = '#general' } = req.body;
+        const { message, channel = '#general', taskId, threadTs } = req.body;
         
         if (!message) {
             return res.status(400).json({
@@ -159,12 +165,35 @@ router.post('/notify', authenticateToken, async (req, res) => {
             });
         }
 
-        await slackService.client.chat.postMessage({
-            channel: channel,
+        // If taskId is provided, try to find the original thread
+        let targetChannel = channel;
+        let targetThreadTs = threadTs;
+        
+        if (taskId && !threadTs) {
+            try {
+                const task = await googleSheetsService.getTask(taskId);
+                if (task && task.slackThreadId) {
+                    targetThreadTs = task.slackThreadId;
+                    targetChannel = task.slackChannelId || channel;
+                }
+            } catch (error) {
+                console.log('Could not find Slack thread for task:', taskId);
+            }
+        }
+
+        const messageOptions = {
+            channel: targetChannel,
             text: message,
             username: 'KiranaClub TaskManager',
             icon_emoji: ':office:'
-        });
+        };
+
+        // Add thread_ts if we have it
+        if (targetThreadTs) {
+            messageOptions.thread_ts = targetThreadTs;
+        }
+
+        await slackService.client.chat.postMessage(messageOptions);
 
         res.json({
             success: true,
@@ -364,6 +393,90 @@ router.post('/sprint-created', authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to send sprint creation notification'
+        });
+    }
+});
+
+// Enhanced task update notifications with thread support
+router.post('/task-updated', authenticateToken, async (req, res) => {
+    try {
+        const { taskId, taskTitle, updatedBy, changes, threadTs, channelId } = req.body;
+        
+        // Find the original task to get thread information
+        let targetChannel = channelId || process.env.SLACK_NOTIFICATIONS_CHANNEL || '#general';
+        let targetThreadTs = threadTs;
+        
+        if (taskId && !threadTs) {
+            try {
+                const task = await googleSheetsService.getTask(taskId);
+                if (task && task.slackThreadId) {
+                    targetThreadTs = task.slackThreadId;
+                    targetChannel = task.slackChannelId || targetChannel;
+                }
+            } catch (error) {
+                console.log('Could not find Slack thread for task:', taskId);
+            }
+        }
+
+        // Build change description
+        const changeDescriptions = [];
+        if (changes.status) changeDescriptions.push(`Status: ${changes.status}`);
+        if (changes.priority) changeDescriptions.push(`Priority: ${changes.priority}`);
+        if (changes.assignedTo) changeDescriptions.push(`Assigned to: ${changes.assignedTo}`);
+        if (changes.description) changeDescriptions.push('Description updated');
+        if (changes.sprintWeek) changeDescriptions.push(`Sprint: ${changes.sprintWeek}`);
+
+        const changeText = changeDescriptions.length > 0 ? 
+            `\n*Changes:* ${changeDescriptions.join(', ')}` : '';
+
+        const blocks = [
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: `📝 *Task Updated*\n*${taskTitle}*${changeText}`
+                }
+            },
+            {
+                type: 'section',
+                fields: [
+                    { type: 'mrkdwn', text: `*Updated by:* ${updatedBy}` },
+                    { type: 'mrkdwn', text: `*Task ID:* ${taskId}` }
+                ]
+            },
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: `🔗 <${process.env.FRONTEND_URL || 'http://localhost:3000'}/task/${taskId}|View Task Details>`
+                }
+            }
+        ];
+
+        const messageOptions = {
+            channel: targetChannel,
+            blocks: blocks,
+            username: 'KiranaClub TaskManager',
+            icon_emoji: ':office:'
+        };
+
+        // Add thread_ts if we have it
+        if (targetThreadTs) {
+            messageOptions.thread_ts = targetThreadTs;
+        }
+
+        await slackService.client.chat.postMessage(messageOptions);
+
+        res.json({
+            success: true,
+            message: 'Task update notification sent'
+        });
+
+    } catch (error) {
+        console.error('Task update notification error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to send task update notification'
         });
     }
 });

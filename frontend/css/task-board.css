@@ -16,7 +16,7 @@ Light mode only - following the exact design specification
     gap: 16px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 20px 24px;
+    padding: 20px 24px 120px 24px; /* Increased bottom padding from 60px to 120px */
     height: 100%;
     scroll-behavior: smooth;
     /* Enhanced touch scroll handling */

@@ -1,7 +1,8 @@
 // API Service for KiranaClub Task Manager
 class APIService {
     constructor() {
-        this.baseURL = 'http://localhost:3001/api';
+        // Use relative URL for single server deployment
+        this.baseURL = '/api';
         this.token = localStorage.getItem('authToken');
     }
 
@@ -203,6 +204,19 @@ class APIService {
         }
     }
 
+    // Slack task notification with thread support
+    async sendSlackTaskNotification(message, taskId, channel = '#general') {
+        try {
+            return await this.request('/slack/notify', {
+                method: 'POST',
+                body: JSON.stringify({ message, taskId, channel }),
+            });
+        } catch (error) {
+            console.error('Failed to send Slack task notification:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     async sendTaskAssignedNotification(taskTitle, assignedTo, assignedBy) {
         try {
             return await this.request('/slack/task-assigned', {
@@ -247,6 +261,19 @@ class APIService {
             });
         } catch (error) {
             console.error('Sprint creation notification failed:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Slack task update notification with thread support
+    async sendTaskUpdateNotification(taskId, taskTitle, updatedBy, changes, threadTs, channelId) {
+        try {
+            return await this.request('/slack/task-updated', {
+                method: 'POST',
+                body: JSON.stringify({ taskId, taskTitle, updatedBy, changes, threadTs, channelId }),
+            });
+        } catch (error) {
+            console.error('Task update notification failed:', error);
             return { success: false, error: error.message };
         }
     }

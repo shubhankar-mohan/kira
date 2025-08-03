@@ -58,6 +58,8 @@ python3 -m http.server 3000
 npx serve -p 3000
 ```
 
+**Note**: The `-s` flag enables SPA (Single Page Application) routing support, which serves `index.html` for all client-side routes like `/dashboard`, `/board`, `/task/:id`, etc.
+
 ## Project Structure
 
 ```

@@ -15,6 +15,9 @@ class SlackService {
         this.scheduledJobs = [];
         this.scrumMaster = null; // Will be initialized after client is ready
         
+        // Cleanup old thread mappings every hour to prevent memory leaks
+        setInterval(() => this.cleanupOldThreads(), 60 * 60 * 1000);
+        
         this.initialize();
     }
 
@@ -96,18 +99,26 @@ class SlackService {
             const channel = event.channel;
             const ts = event.ts;
 
+            // Enhanced duplicate prevention - check both thread_ts and message content
+            const messageKey = `${ts}-${text}`;
+            if (this.threadToTaskMap.has(ts) || this.threadToTaskMap.has(messageKey)) {
+                console.log(`Skipping duplicate task creation for thread ${ts}`);
+                return;
+            }
+
             // Extract task creation info from mention
             const taskInfo = this.parseTaskFromMention(event.text);
             
             if (taskInfo) {
                 // Create task in Google Sheets
                 const user = await this.getUserBySlackId(userId);
-                const task = await this.createTaskFromSlack(taskInfo, user, ts);
+                const task = await this.createTaskFromSlack(taskInfo, user, ts, channel);
                 
-                // Map thread to task for future comments
+                // Map thread to task for future comments (prevent duplicates)
                 this.threadToTaskMap.set(ts, task.id);
+                this.threadToTaskMap.set(messageKey, task.id);
                 
-                // Send confirmation message
+                // Send confirmation message with task URL
                 await client.chat.postMessage({
                     channel: channel,
                     thread_ts: ts,
@@ -135,14 +146,21 @@ class SlackService {
     }
 
     parseTaskFromMention(text) {
-        // Remove the bot mention
-        const cleanText = text.replace(/<@[^>]+>/g, '').trim();
+        // Remove the bot mention from the beginning only
+        const botMentionPattern = /<@[^>]+>/;
+        const firstMentionMatch = text.match(botMentionPattern);
+        if (!firstMentionMatch) return null; // No bot mention found
+        
+        const cleanText = text.replace(firstMentionMatch[0], '').trim();
+        
+        // If the cleaned text is empty or too short, return null
+        if (!cleanText || cleanText.length < 3) return null;
         
         // Extract priority (P0, P1, P2)
         const priorityMatch = cleanText.match(/\b(P[0-2])\b/i);
         const priority = priorityMatch ? priorityMatch[1].toUpperCase() : 'P2';
         
-        // Extract assigned users
+        // Extract assigned users (excluding the bot mention)
         const userMentions = text.match(/<@[UW][A-Z0-9]+>/g) || [];
         const assignedUsers = userMentions.slice(1); // Skip the first mention (bot)
         
@@ -165,9 +183,11 @@ class SlackService {
             .replace(/due\s+(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})/gi, '')
             .replace(/(\d+)\s*points?/gi, '')
             .replace(/<@[UW][A-Z0-9]+>/g, '')
+            .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
             .trim();
 
-        if (!title) return null;
+        // Ensure we have a meaningful title
+        if (!title || title.length < 3) return null;
 
         return {
             title,
@@ -180,7 +200,7 @@ class SlackService {
         };
     }
 
-    async createTaskFromSlack(taskInfo, createdBy, threadTs) {
+    async createTaskFromSlack(taskInfo, createdBy, threadTs, channelId) {
         // Get current active sprint
         const sprints = await googleSheetsService.getSprints();
         const activeSprint = sprints.find(s => s.status === 'Active') || sprints[0];
@@ -203,7 +223,9 @@ class SlackService {
             dueDate: taskInfo.dueDate,
             sprintWeek: activeSprint ? activeSprint.name : '',
             createdBy: createdBy ? createdBy.name : 'Slack User',
-            message: `Created from Slack thread: ${threadTs}`
+            message: `Created from Slack thread: ${threadTs}`,
+            slackThreadId: threadTs,
+            slackChannelId: channelId
         };
 
         const task = await googleSheetsService.createTask(taskData);
@@ -343,6 +365,136 @@ class SlackService {
         } catch (error) {
             respond({
                 text: `❌ Failed to close task ${taskId}. Please check the task ID.`,
+                response_type: 'ephemeral'
+            });
+        }
+    }
+
+    async handleAssignCommand(args, respond, userId) {
+        const taskId = args[0];
+        const userMention = args[1];
+        
+        if (!taskId || !userMention) {
+            return respond({
+                text: '❌ Please provide a task ID and user. Usage: `/kira assign TASK_ID @user`',
+                response_type: 'ephemeral'
+            });
+        }
+
+        try {
+            // Extract user ID from mention
+            const userIdMatch = userMention.match(/<@([UW][A-Z0-9]+)>/);
+            const targetUserId = userIdMatch ? userIdMatch[1] : null;
+            
+            if (!targetUserId) {
+                return respond({
+                    text: '❌ Please mention a valid user. Usage: `/kira assign TASK_ID @user`',
+                    response_type: 'ephemeral'
+                });
+            }
+            
+            const targetUser = await this.getUserBySlackId(targetUserId);
+            if (!targetUser) {
+                return respond({
+                    text: '❌ User not found in Kira system.',
+                    response_type: 'ephemeral'
+                });
+            }
+            
+            const currentUser = await this.getUserBySlackId(userId);
+            await googleSheetsService.updateTask(taskId, {
+                assignedTo: targetUser.email,
+                lastEditedBy: currentUser ? currentUser.name : 'Slack User'
+            });
+
+            respond({
+                text: `✅ Task ${taskId} assigned to ${targetUser.name}!`,
+                response_type: 'in_channel'
+            });
+
+        } catch (error) {
+            respond({
+                text: `❌ Failed to assign task ${taskId}. Please check the task ID.`,
+                response_type: 'ephemeral'
+            });
+        }
+    }
+
+    async handleStatusCommand(args, respond) {
+        try {
+            const tasks = await googleSheetsService.getTasks();
+            const sprints = await googleSheetsService.getSprints();
+            
+            const activeSprint = sprints.find(s => s.status === 'Active');
+            if (!activeSprint) {
+                return respond({
+                    text: '❌ No active sprint found.',
+                    response_type: 'ephemeral'
+                });
+            }
+
+            const sprintTasks = tasks.filter(t => t.sprintWeek === activeSprint.name);
+            const stats = this.calculateSprintStats(sprintTasks);
+            
+            const statusText = `📊 *Sprint Status - ${activeSprint.name}*\n\n` +
+                `• *Total Tasks:* ${stats.total}\n` +
+                `• *Completed:* ${stats.completed} (${Math.round(stats.completed/stats.total*100)}%)\n` +
+                `• *In Progress:* ${stats.inProgress}\n` +
+                `• *Not Started:* ${stats.todo}\n` +
+                `• *Blocked:* ${stats.blocked}`;
+
+            respond({
+                text: statusText,
+                response_type: 'in_channel'
+            });
+
+        } catch (error) {
+            respond({
+                text: '❌ Error retrieving sprint status.',
+                response_type: 'ephemeral'
+            });
+        }
+    }
+
+    async handleSprintCommand(args, respond) {
+        try {
+            const sprints = await googleSheetsService.getSprints();
+            
+            if (sprints.length === 0) {
+                return respond({
+                    text: '❌ No sprints found.',
+                    response_type: 'ephemeral'
+                });
+            }
+
+            const activeSprints = sprints.filter(s => s.status === 'Active');
+            const upcomingSprints = sprints.filter(s => s.status === 'Planned').slice(0, 3);
+            
+            let sprintText = `🏃 *Sprint Information*\n\n`;
+            
+            if (activeSprints.length > 0) {
+                sprintText += `*Active Sprints:*\n`;
+                activeSprints.forEach(sprint => {
+                    sprintText += `• ${sprint.name} (${sprint.startDate} - ${sprint.endDate})\n`;
+                });
+                sprintText += `\n`;
+            }
+            
+            if (upcomingSprints.length > 0) {
+                sprintText += `*Upcoming Sprints:*\n`;
+                upcomingSprints.forEach(sprint => {
+                    sprintText += `• ${sprint.name} (${sprint.startDate} - ${sprint.endDate})\n`;
+                });
+            }
+
+            respond({
+                text: sprintText,
+                response_type: 'in_channel'
+            });
+
+        } catch (error) {
+            respond({
+                text: '❌ Error retrieving sprint information.',
                 response_type: 'ephemeral'
             });
         }
@@ -705,6 +857,8 @@ class SlackService {
     }
 
     buildTaskCreatedBlocks(task) {
+        const taskUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/task/${task.id}`;
+        
         return [
             {
                 type: 'section',
@@ -721,6 +875,13 @@ class SlackService {
                     { type: 'mrkdwn', text: `*Type:* ${task.type}` },
                     { type: 'mrkdwn', text: `*Assigned:* ${task.assignedTo || 'Unassigned'}` }
                 ]
+            },
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: `🔗 <${taskUrl}|View Task Details>`
+                }
             },
             {
                 type: 'actions',
@@ -875,6 +1036,46 @@ Create tasks by mentioning @kira: \`@kira Fix login bug @john @jane P1 Feature d
     async generateCodeReviewReminders() {
         // Implementation for code review reminders
         // This would track tasks waiting for review and send reminders
+    }
+
+    async notifyAssignedUsers(assignedUsers, task, client) {
+        try {
+            for (const slackUserId of assignedUsers) {
+                const user = await this.getUserBySlackId(slackUserId);
+                if (user) {
+                    const taskUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/task/${task.id}`;
+                    
+                    await client.chat.postMessage({
+                        channel: slackUserId, // DM to the user
+                        text: `📋 You have been assigned a new task: *${task.task}*\n\n🔗 <${taskUrl}|View Task Details>`,
+                        unfurl_links: false
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error notifying assigned users:', error);
+        }
+    }
+
+    cleanupOldThreads() {
+        try {
+            const now = Date.now();
+            const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+            
+            // Convert thread timestamp to milliseconds (Slack timestamps are in seconds with decimal)
+            for (const [threadTs, taskId] of this.threadToTaskMap) {
+                // Skip non-timestamp keys (like message keys)
+                if (!threadTs.includes('.')) continue;
+                
+                const threadTime = parseFloat(threadTs) * 1000;
+                if (now - threadTime > maxAge) {
+                    this.threadToTaskMap.delete(threadTs);
+                    console.log(`Cleaned up old thread mapping: ${threadTs}`);
+                }
+            }
+        } catch (error) {
+            console.error('Error cleaning up thread mappings:', error);
+        }
     }
 }
 

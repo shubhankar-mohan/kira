@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# KiranaClub Task Manager Startup Script
+# KiranaClub Task Manager Startup Script (Single Server)
 
 echo "🏪 Starting KiranaClub Task Manager..."
+echo "🔄 Single server mode: Backend serves frontend on port 3001"
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
@@ -37,66 +38,52 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-# Start the backend server
-echo "🚀 Starting backend server on port 3001..."
+# Start the single server (backend serves frontend)
+echo "🚀 Starting KiranaClub Task Manager on port 3001..."
+echo "🔄 Backend will serve frontend files with client-side routing"
 npm start &
-BACKEND_PID=$!
+SERVER_PID=$!
 
-# Wait a moment for backend to start
-sleep 3
+# Wait a moment for server to start
+sleep 5
 
-# Check if backend is running
+# Check if server is running
 if curl -s http://localhost:3001/health > /dev/null; then
-    echo "✅ Backend server is running successfully!"
+    echo "✅ Server is running successfully!"
 else
-    echo "❌ Backend server failed to start. Check the logs above."
+    echo "❌ Server failed to start. Check the logs above."
     exit 1
 fi
 
-# Navigate to frontend directory
-cd ../frontend
-
-# Start frontend server
-echo "🌐 Starting frontend server on port 3000..."
-echo "📖 If you don't have a local server, you can use:"
-echo "   Python: python3 -m http.server 3000"
-echo "   Node.js: npx http-server -p 3000"
-echo "   PHP: php -S localhost:3000"
-
-# Try to start with Python if available
-if command -v python3 &> /dev/null; then
-    echo "🐍 Starting with Python..."
-    python3 -m http.server 3000 &
-    FRONTEND_PID=$!
-    
-    sleep 2
-    echo ""
-    echo "🎉 KiranaClub Task Manager is now running!"
-    echo "📱 Frontend: http://localhost:3000"
-    echo "🔌 Backend API: http://localhost:3001"
-    echo "📊 Health Check: http://localhost:3001/health"
-    echo ""
-    echo "🔐 Demo Login Credentials:"
-    echo "   Admin: admin@kirana.club / admin123"
-    echo "   Manager: manager@kirana.club / manager123"
-    echo "   Developer: dev@kirana.club / dev123"
-    echo ""
-    echo "⚠️  Don't forget to configure your Google Sheets credentials in backend/.env"
-    echo "📖 See README.md for complete setup instructions"
-    echo ""
-    echo "Press Ctrl+C to stop all servers"
-    
-    # Wait for user interrupt
-    trap "echo ''; echo '🛑 Stopping servers...'; kill $BACKEND_PID $FRONTEND_PID; exit 0" INT
-    wait
+# Test frontend serving
+if curl -s http://localhost:3001/ | grep -q "Kira Task Manager"; then
+    echo "✅ Frontend is being served correctly!"
 else
-    echo "🌐 Please start a web server in the frontend directory manually:"
-    echo "   cd frontend && python3 -m http.server 3000"
-    echo ""
-    echo "🎉 Backend is running at http://localhost:3001"
-    echo "📊 Health Check: http://localhost:3001/health"
-    
-    # Keep backend running
-    trap "echo ''; echo '🛑 Stopping backend...'; kill $BACKEND_PID; exit 0" INT
-    wait $BACKEND_PID
+    echo "⚠️  Frontend serving might have issues. Check the logs above."
 fi
+
+echo ""
+echo "🎉 KiranaClub Task Manager is now running!"
+echo "📱 Application: http://localhost:3001"
+echo "📊 Health Check: http://localhost:3001/health"
+echo "🔌 API Endpoints: http://localhost:3001/api/*"
+echo ""
+echo "🔐 Demo Login Credentials:"
+echo "   Admin: admin@kirana.club / admin123"
+echo "   Manager: manager@kirana.club / manager123"
+echo "   Developer: dev@kirana.club / dev123"
+echo ""
+echo "📋 Available URLs:"
+echo "   Dashboard: http://localhost:3001/dashboard"
+echo "   Task Board: http://localhost:3001/board"
+echo "   Sprints: http://localhost:3001/sprints"
+echo "   Task Details: http://localhost:3001/task/{taskId}"
+echo ""
+echo "⚠️  Don't forget to configure your Google Sheets credentials in backend/.env"
+echo "📖 See README.md for complete setup instructions"
+echo ""
+echo "Press Ctrl+C to stop the server"
+
+# Wait for user interrupt
+trap "echo ''; echo '🛑 Stopping server...'; kill $SERVER_PID; exit 0" INT
+wait $SERVER_PID

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kira Task Manager</title>
+    <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/login.css">
     <link rel="stylesheet" href="css/task-board.css">
@@ -26,6 +27,7 @@
                         id="username" 
                         class="form-input" 
                         placeholder="Enter your email"
+                        autocomplete="username"
                         required
                     >
                 </div>
@@ -37,6 +39,7 @@
                         id="password" 
                         class="form-input" 
                         placeholder="Enter your password"
+                        autocomplete="current-password"
                         required
                     >
                 </div>
@@ -56,15 +59,15 @@
 
             <div class="demo-accounts">
                 <h4>👤 Demo Accounts</h4>
-                <div class="demo-account" onclick="fillDemoCredentials('admin@kirana.club', 'admin123')">
+                <div class="demo-account">
                     <span class="role">Admin</span>
                     <span class="credentials">admin@kirana.club / admin123</span>
                 </div>
-                <div class="demo-account" onclick="fillDemoCredentials('manager@kirana.club', 'manager123')">
+                <div class="demo-account">
                     <span class="role">Manager</span>
                     <span class="credentials">manager@kirana.club / manager123</span>
                 </div>
-                <div class="demo-account" onclick="fillDemoCredentials('dev@kirana.club', 'dev123')">
+                <div class="demo-account">
                     <span class="role">Developer</span>
                     <span class="credentials">dev@kirana.club / dev123</span>
                 </div>
@@ -84,13 +87,13 @@
                 <div class="header-actions">
                     <input type="text" class="search-box" placeholder="Search tasks, people, or keywords...">
                     <button class="btn btn-secondary">Filter</button>
-                    <button class="btn btn-secondary" onclick="syncData()">🔄 Sync</button>
-                    <button class="btn" onclick="showCreateTaskModal()">+ New Task</button>
+                    <button class="btn btn-secondary" data-action="syncData">🔄 Sync</button>
+                    <button class="btn" data-action="showCreateTaskModal">+ New Task</button>
                 </div>
                 <!-- User Profile in Header -->
                 <div class="header-profile">
                     <div class="profile-menu">
-                        <button class="profile-button" onclick="toggleProfileMenu()">
+                        <button class="profile-button">
                             <div class="profile-avatar" id="profileAvatar">U</div>
                             <div class="profile-info">
                                 <div class="profile-name" id="profileName">User</div>
@@ -111,7 +114,7 @@
                                     </div>
                                 </div>
                                 <div class="profile-section">
-                                    <div class="profile-menu-item danger" onclick="logout()">
+                                    <div class="profile-menu-item danger" data-action="logout">
                                         <span class="profile-menu-icon">🚪</span>
                                         Sign Out
                                     </div>
@@ -142,19 +145,19 @@
             <div class="sidebar" id="sidebar">
                 <div class="sidebar-section">
                     <div class="sidebar-section-title">Navigation</div>
-                    <div class="nav-item active" data-section="dashboard" onclick="navigateTo('dashboard')">
+                    <div class="nav-item active" data-section="dashboard">
                         <span class="nav-item-icon">📊</span>
                         Dashboard
                     </div>
-                    <div class="nav-item" data-section="board" onclick="navigateTo('board')">
+                    <div class="nav-item" data-section="board">
                         <span class="nav-item-icon">📋</span>
                         Task Board
                     </div>
-                    <div class="nav-item" data-section="sprints" onclick="navigateTo('sprints')">
+                    <div class="nav-item" data-section="sprints">
                         <span class="nav-item-icon">🏃</span>
                         Sprints
                     </div>
-                    <div class="nav-item" id="userManagementNav" data-section="users" onclick="navigateTo('users')">
+                    <div class="nav-item" id="userManagementNav" data-section="users">
                         <span class="nav-item-icon">👥</span>
                         Team
                     </div>
@@ -211,13 +214,13 @@
                             <div class="filter-group">
                                 <label>Sprint</label>
                                 <div class="multiselect-container">
-                                    <div class="multiselect-display" onclick="toggleMultiselect('sprintFilter')">
+                                    <div class="multiselect-display" data-filter-id="sprintFilter">
                                         <span class="multiselect-text">All Sprints</span>
                                         <span class="multiselect-arrow">▼</span>
                                     </div>
                                     <div class="multiselect-dropdown" id="sprintFilterDropdown">
                                         <div class="multiselect-option" data-value="all">
-                                            <input type="checkbox" id="sprint-all" checked>
+                                            <input type="checkbox" id="sprint-all" checked data-filter>
                                             <label for="sprint-all">All Sprints</label>
                                         </div>
                                         <!-- Sprint options will be populated here -->
@@ -228,13 +231,13 @@
                             <div class="filter-group">
                                 <label>Assigned To</label>
                                 <div class="multiselect-container">
-                                    <div class="multiselect-display" onclick="toggleMultiselect('assigneeFilter')">
+                                    <div class="multiselect-display" data-filter-id="assigneeFilter">
                                         <span class="multiselect-text">All Assignees</span>
                                         <span class="multiselect-arrow">▼</span>
                                     </div>
                                     <div class="multiselect-dropdown" id="assigneeFilterDropdown">
                                         <div class="multiselect-option" data-value="all">
-                                            <input type="checkbox" id="assignee-all" checked>
+                                            <input type="checkbox" id="assignee-all" checked data-filter>
                                             <label for="assignee-all">All Assignees</label>
                                         </div>
                                         <!-- Assignee options will be populated here -->
@@ -245,13 +248,13 @@
                             <div class="filter-group">
                                 <label>Assigned By</label>
                                 <div class="multiselect-container">
-                                    <div class="multiselect-display" onclick="toggleMultiselect('assignedByFilter')">
+                                    <div class="multiselect-display" data-filter-id="assignedByFilter">
                                         <span class="multiselect-text">All Creators</span>
                                         <span class="multiselect-arrow">▼</span>
                                     </div>
                                     <div class="multiselect-dropdown" id="assignedByFilterDropdown">
                                         <div class="multiselect-option" data-value="all">
-                                            <input type="checkbox" id="assignedBy-all" checked>
+                                            <input type="checkbox" id="assignedBy-all" checked data-filter>
                                             <label for="assignedBy-all">All Creators</label>
                                         </div>
                                         <!-- Creator options will be populated here -->
@@ -262,29 +265,29 @@
                             <div class="filter-group">
                                 <label>Priority</label>
                                 <div class="multiselect-container">
-                                    <div class="multiselect-display" onclick="toggleMultiselect('priorityFilter')">
+                                    <div class="multiselect-display" data-filter-id="priorityFilter">
                                         <span class="multiselect-text">All Priorities</span>
                                         <span class="multiselect-arrow">▼</span>
                                     </div>
                                     <div class="multiselect-dropdown" id="priorityFilterDropdown">
                                         <div class="multiselect-option" data-value="all">
-                                            <input type="checkbox" id="priority-all" checked>
+                                            <input type="checkbox" id="priority-all" checked data-filter>
                                             <label for="priority-all">All Priorities</label>
                                         </div>
                                         <div class="multiselect-option" data-value="P0">
-                                            <input type="checkbox" id="priority-P0">
+                                            <input type="checkbox" id="priority-P0" data-filter>
                                             <label for="priority-P0">P0 - Critical</label>
                                         </div>
                                         <div class="multiselect-option" data-value="P1">
-                                            <input type="checkbox" id="priority-P1">
+                                            <input type="checkbox" id="priority-P1" data-filter>
                                             <label for="priority-P1">P1 - High</label>
                                         </div>
                                         <div class="multiselect-option" data-value="P2">
-                                            <input type="checkbox" id="priority-P2">
+                                            <input type="checkbox" id="priority-P2" data-filter>
                                             <label for="priority-P2">P2 - Medium</label>
                                         </div>
                                         <div class="multiselect-option" data-value="Backlog">
-                                            <input type="checkbox" id="priority-Backlog">
+                                            <input type="checkbox" id="priority-Backlog" data-filter>
                                             <label for="priority-Backlog">Backlog</label>
                                         </div>
                                     </div>
@@ -292,8 +295,8 @@
                             </div>
                             
                             <div class="filter-actions">
-                                <button class="btn btn-secondary" onclick="clearAllFilters()">Clear All</button>
-                                <button class="btn" onclick="applyFilters()">Apply Filters</button>
+                                                            <button class="btn btn-secondary" data-action="clearAllFilters">Clear All</button>
+                            <button class="btn" data-action="applyFilters">Apply Filters</button>
                             </div>
                         </div>
                         
@@ -308,7 +311,7 @@
                     <div id="sprintsSection" class="page-section hidden">
                         <div class="section-header">
                             <h2>Sprints</h2>
-                            <button class="btn" onclick="showCreateSprintModal()">+ New Sprint</button>
+                            <button class="btn" data-action="showCreateSprintModal">+ New Sprint</button>
                         </div>
                         <div id="sprintsContent">
                             <!-- Sprints will be rendered here -->
@@ -319,10 +322,36 @@
                     <div id="usersSection" class="page-section hidden">
                         <div class="section-header">
                             <h2>Team</h2>
-                            <button class="btn" onclick="showCreateUserModal()">+ New User</button>
+                            <button class="btn" data-action="showCreateUserModal">+ New User</button>
                         </div>
                         <div id="usersContent">
                             <!-- Users will be rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- Task Detail Section -->
+                    <div id="taskDetailSection" class="page-section hidden">
+                        <div class="section-header">
+                            <div class="task-detail-header">
+                                <button class="back-button">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="15,18 9,12 15,6"></polyline>
+                                    </svg>
+                                    Back to Board
+                                </button>
+                                <div class="task-detail-breadcrumb">
+                                    <span>Task Board</span>
+                                    <span>/</span>
+                                    <span id="taskDetailBreadcrumb">Task Details</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="task-detail-page">
+                            <div class="task-detail-container">
+                                <div id="taskDetailForm">
+                                    <!-- Task detail form will be rendered here -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -344,7 +373,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Create New Task</h3>
-                <button class="modal-close" onclick="closeModal('createTaskModal')">&times;</button>
+                                        <button class="modal-close">&times;</button>
             </div>
             <form id="createTaskForm">
                 <div class="form-grid">
@@ -388,41 +417,143 @@
                 </div>
             </form>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('createTaskModal')">Cancel</button>
-                <button class="btn" onclick="createTask()">Create Task</button>
+                                    <button class="btn btn-secondary">Cancel</button>
+                    <button class="btn" data-action="createTask">Create Task</button>
             </div>
         </div>
     </div>
 
     <div id="createSprintModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Create New Sprint</h3>
-                <button class="modal-close" onclick="closeModal('createSprintModal')">&times;</button>
+        <div class="modal-content modal-large sprint-modal">
+            <div class="modal-header sprint-header">
+                <div class="sprint-header-info">
+                    <h3 class="sprint-title-large">Create New Sprint</h3>
+                    <p class="sprint-subtitle">Plan your next development iteration</p>
+                </div>
+                                        <button class="modal-close-modern" aria-label="Close">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
-            <form id="createSprintForm">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="sprintName">Sprint Name</label>
-                        <input type="text" id="sprintName" required>
+            
+            <div class="modal-body">
+                <form id="createSprintForm">
+                    <!-- Sprint Information Section -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <h4 class="section-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path d="m8 12 2 2 4-4"></path>
+                                    <path d="M21 12c0 7.8-5.2 13-9 13s-9-5.2-9-13 5.2-13 9-13 9 5.2 9 13z"></path>
+                                </svg>
+                                Sprint Details
+                            </h4>
+                        </div>
+                        
+                        <div class="form-grid-modern">
+                            <div class="input-group-modern full-width">
+                                <label for="sprintName" class="input-label">Sprint Name</label>
+                                <input type="text" id="sprintName" class="input-modern" placeholder="e.g., Sprint 1 - Q1 2024" required>
+                            </div>
+                            
+                            <div class="input-group-modern">
+                                <label for="sprintStartDate" class="input-label">Start Date</label>
+                                <div class="input-with-icon">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                    <input type="date" id="sprintStartDate" class="input-modern with-icon" required>
+                                </div>
+                            </div>
+                            
+                            <div class="input-group-modern">
+                                <label for="sprintEndDate" class="input-label">End Date</label>
+                                <div class="input-with-icon">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                    <input type="date" id="sprintEndDate" class="input-modern with-icon" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="input-group-modern full-width">
+                            <label for="sprintGoal" class="input-label">Sprint Goal</label>
+                            <div class="textarea-with-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 11l3 3 8-8"></path>
+                                    <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9"></path>
+                                </svg>
+                                <textarea id="sprintGoal" class="textarea-modern with-icon" rows="3" placeholder="What do you want to achieve in this sprint?"></textarea>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="sprintStartDate">Start Date</label>
-                        <input type="date" id="sprintStartDate" required>
+
+                    <!-- Sprint Statistics Preview -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <h4 class="section-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                                </svg>
+                                Quick Stats
+                            </h4>
+                        </div>
+                        
+                        <div class="sprint-stats-preview">
+                            <div class="stat-preview-item">
+                                <div class="stat-icon">📅</div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Duration</span>
+                                    <span id="sprintDuration" class="stat-value">Select dates</span>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-preview-item">
+                                <div class="stat-icon">📋</div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Available Tasks</span>
+                                    <span id="availableTasks" class="stat-value">Loading...</span>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-preview-item">
+                                <div class="stat-icon">👥</div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Team Members</span>
+                                    <span id="teamMembers" class="stat-value">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="sprintEndDate">End Date</label>
-                        <input type="date" id="sprintEndDate" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="sprintGoal">Sprint Goal</label>
-                    <textarea id="sprintGoal" rows="3"></textarea>
-                </div>
-            </form>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('createSprintModal')">Cancel</button>
-                <button class="btn" onclick="createSprint()">Create Sprint</button>
+                </form>
+            </div>
+            
+            <div class="modal-footer modern-footer">
+                <button class="btn-modern btn-secondary">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Cancel
+                </button>
+                <button class="btn-modern btn-primary" data-action="createSprint">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20m9-9H3"></path>
+                    </svg>
+                    Create Sprint
+                </button>
             </div>
         </div>
     </div>
@@ -431,7 +562,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Create New User</h3>
-                <button class="modal-close" onclick="closeModal('createUserModal')">&times;</button>
+                <button class="modal-close">&times;</button>
             </div>
             <form id="createUserForm">
                 <div class="form-grid">
@@ -458,14 +589,197 @@
                 </div>
             </form>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
-                <button class="btn" onclick="createUser()">Create User</button>
+                <button class="btn btn-secondary">Cancel</button>
+                <button class="btn" data-action="createUser">Create User</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Details Modal -->
+    <div id="taskDetailsModal" class="modal">
+        <div class="modal-content modal-large task-details-modal">
+            <div class="modal-header task-details-header">
+                <div class="task-header-info">
+                    <h3 id="taskDetailsTitle" class="task-title-large">Task Details</h3>
+                    <div class="task-meta-badges">
+                        <span id="taskIdBadge" class="task-id-badge"></span>
+                        <span id="taskStatusBadge" class="status-badge"></span>
+                    </div>
+                </div>
+                <button class="modal-close-modern" aria-label="Close">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <form id="taskDetailsForm">
+                    <!-- Primary Information Section -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <h4 class="section-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 11l3 3 8-8"></path>
+                                    <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9"></path>
+                                </svg>
+                                Task Information
+                            </h4>
+                        </div>
+                        
+                        <div class="form-grid-modern">
+                            <div class="input-group-modern full-width">
+                                <label for="detailTaskTitle" class="input-label">Task Title</label>
+                                <input type="text" id="detailTaskTitle" class="input-modern" required>
+                            </div>
+                            
+                            <div class="input-group-modern">
+                                <label for="detailTaskStatus" class="input-label">Status</label>
+                                <div class="select-wrapper">
+                                    <select id="detailTaskStatus" class="select-modern" required>
+                                        <option value="Not started">Not Started</option>
+                                        <option value="In progress">In Progress</option>
+                                        <option value="Dev Testing">Dev Testing</option>
+                                        <option value="Product Testing">Product Testing</option>
+                                        <option value="Awaiting Release">Awaiting Release</option>
+                                        <option value="Done">Done</option>
+                                        <option value="Blocked - Product">Blocked - Product</option>
+                                        <option value="Blocked - Engineering">Blocked - Engineering</option>
+                                    </select>
+                                    <svg class="select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6,9 12,15 18,9"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <div class="input-group-modern">
+                                <label for="detailTaskPriority" class="input-label">Priority</label>
+                                <div class="select-wrapper">
+                                    <select id="detailTaskPriority" class="select-modern" required>
+                                        <option value="P0">🔴 P0 - Critical</option>
+                                        <option value="P1">🟠 P1 - High</option>
+                                        <option value="P2">🟡 P2 - Medium</option>
+                                        <option value="Backlog">⚪ Backlog</option>
+                                    </select>
+                                    <svg class="select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6,9 12,15 18,9"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <div class="input-group-modern">
+                                <label for="detailTaskType" class="input-label">Type</label>
+                                <div class="select-wrapper">
+                                    <select id="detailTaskType" class="select-modern" required>
+                                        <option value="Feature">🚀 Feature</option>
+                                        <option value="Bug">🐛 Bug</option>
+                                        <option value="Improvement">✨ Improvement</option>
+                                    </select>
+                                    <svg class="select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6,9 12,15 18,9"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <div class="input-group-modern">
+                                <label for="detailTaskAssignee" class="input-label">Assigned To</label>
+                                <div class="select-wrapper">
+                                    <select id="detailTaskAssignee" class="select-modern">
+                                        <option value="">👤 Select assignee</option>
+                                    </select>
+                                    <svg class="select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6,9 12,15 18,9"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <div class="input-group-modern">
+                                <label for="detailTaskSprint" class="input-label">Sprint</label>
+                                <div class="select-wrapper">
+                                    <select id="detailTaskSprint" class="select-modern">
+                                        <option value="">🏃 No Sprint</option>
+                                    </select>
+                                    <svg class="select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6,9 12,15 18,9"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="input-group-modern full-width">
+                            <label for="detailTaskDescription" class="input-label">Description</label>
+                            <textarea id="detailTaskDescription" class="textarea-modern" rows="4" placeholder="Enter task description..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Metadata Section -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <h4 class="section-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path d="M12 1v6m0 6v6m-11-1h6m6 0h6"></path>
+                                </svg>
+                                Metadata
+                            </h4>
+                        </div>
+                        
+                        <div class="metadata-grid">
+                            <div class="metadata-item">
+                                <label class="metadata-label">Created By</label>
+                                <div class="metadata-value">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="12" cy="7" r="4"></circle>
+                                    </svg>
+                                    <span id="detailTaskCreatedBy"></span>
+                                </div>
+                            </div>
+                            
+                            <div class="metadata-item">
+                                <label class="metadata-label">Created At</label>
+                                <div class="metadata-value">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12,6 12,12 16,14"></polyline>
+                                    </svg>
+                                    <span id="detailTaskCreatedAt"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="modal-footer modern-footer">
+                <button class="btn-modern btn-secondary">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Cancel
+                </button>
+                <button class="btn-modern btn-primary" data-action="saveTaskDetails">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                        <polyline points="17,21 17,13 7,13 7,21"></polyline>
+                        <polyline points="7,3 7,8 15,8"></polyline>
+                    </svg>
+                    Save Changes
+                </button>
             </div>
         </div>
     </div>
 
     <script src="js/api.js"></script>
+    <script src="js/modules/router.js"></script>
+    <script src="js/modules/auth.js"></script>
+    <script src="js/modules/task-manager.js"></script>
+    <script src="js/modules/modal-manager.js"></script>
+    <script src="js/modules/ui-manager.js"></script>
     <script src="js/task-board.js"></script>
+    <script src="js/event-handlers.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
