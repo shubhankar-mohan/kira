@@ -708,6 +708,8 @@ class TaskBoardManager {
         card.addEventListener('click', (e) => {
             // Don't open details if clicking on action buttons
             if (!e.target.closest('.task-actions') && !e.target.closest('.action-btn')) {
+                e.preventDefault();
+                e.stopPropagation();
                 openTaskDetails(task.id);
             }
         });

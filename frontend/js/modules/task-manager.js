@@ -245,6 +245,12 @@ class TaskManager {
         }
     }
 
+    openTaskDetails(taskId) {
+        if (window.modalManager) {
+            window.modalManager.openTaskDetails(taskId);
+        }
+    }
+
     async createTask() {
         const formData = {
             task: document.getElementById('taskTitle').value,
@@ -291,6 +297,12 @@ class TaskManager {
         if (window.modalManager) {
             window.modalManager.closeModal(modalId);
         }
+    }
+
+    async sendSlackTaskUpdate(taskId, taskData) {
+        // Mock Slack notification - in real app, this would send to Slack
+        console.log('Slack notification for task update:', taskId, taskData);
+        return Promise.resolve({ success: true });
     }
 }
 
