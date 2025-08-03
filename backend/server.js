@@ -13,7 +13,7 @@ const slackRouter = require('./routes/slack');
 const { router: authRouter } = require('./routes/auth');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 3001; // Changed to 3001 for single server
 
 // Security middleware with custom CSP
 app.use(helmet({
@@ -33,9 +33,9 @@ app.use(helmet({
     },
 }));
 
-// CORS configuration
+// CORS configuration - allow all origins in production
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+    origin: process.env.NODE_ENV === 'production' ? true : (process.env.FRONTEND_URL || 'http://localhost:3001'),
     credentials: true
 }));
 
@@ -46,8 +46,18 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files from frontend directory
-app.use(express.static(path.join(__dirname, '../frontend')));
+// Serve static files from frontend directory with proper MIME types
+app.use(express.static(path.join(__dirname, '../frontend'), {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+    }
+}));
 
 // API Routes
 app.use('/api/auth', authRouter);
@@ -105,10 +115,11 @@ app.get('*', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`🚀 KiranaClub Task Manager API running on port ${PORT}`);
+    console.log(`🚀 KiranaClub Task Manager running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-    console.log(`📋 API docs: http://localhost:${PORT}/`);
+    console.log(`📋 API docs: http://localhost:${PORT}/api`);
+    console.log(`🌐 Frontend: http://localhost:${PORT}/`);
 });
 
 module.exports = app;

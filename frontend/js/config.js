@@ -21,7 +21,8 @@ class Config {
     }
 
     getBackendUrl() {
-        return 'http://localhost:8000';
+        // Since backend and frontend are on same server now
+        return this.BASE_URL;
     }
 
     getTaskUrl(taskId) {

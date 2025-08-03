@@ -4,20 +4,15 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
-# Install Python for any Python dependencies
+# Install Python for any Python dependencies (if needed)
 RUN apk add --no-cache python3 py3-pip
 
 # Copy package files
 COPY backend/package*.json ./backend/
-COPY frontend/package*.json ./frontend/
 
 # Install backend dependencies
 WORKDIR /app/backend
 RUN npm ci --only=production
-
-# Install frontend dependencies (if any)
-WORKDIR /app/frontend
-RUN npm ci --only=production || true
 
 # Copy application code
 WORKDIR /app
@@ -30,7 +25,7 @@ RUN echo "NODE_ENV=production" > ./backend/.env
 # Set working directory to backend
 WORKDIR /app/backend
 
-# Expose port 3001 (backend will serve frontend on this port)
+# Expose port 3001 (single server serving both frontend and backend)
 EXPOSE 3001
 
 # Health check
