@@ -203,6 +203,12 @@ body {
     font-size: 24px;
 }
 
+.header-logo {
+    width: 100px;
+    height: auto;
+    display: block;
+}
+
 .header-actions {
     display: flex;
     gap: 12px;
@@ -1006,6 +1012,10 @@ body {
     
     .search-box {
         min-width: 200px;
+    }
+    
+    .header-logo {
+        width: 80px;
     }
     
     .toolbar {

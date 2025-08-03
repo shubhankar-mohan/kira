@@ -319,6 +319,22 @@ Light mode only - following the exact design specification
     line-height: 1;
 }
 
+/* Copy icon styling */
+.copy-icon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+    border-radius: 4px;
+    padding: 2px;
+}
+
+.copy-icon:hover {
+    opacity: 0.8;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
 .action-text {
     font-size: 10px;
     font-weight: 600;

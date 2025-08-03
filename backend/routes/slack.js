@@ -448,7 +448,7 @@ router.post('/task-updated', authenticateToken, async (req, res) => {
                 type: 'section',
                 text: {
                     type: 'mrkdwn',
-                    text: `🔗 <${process.env.FRONTEND_URL || 'http://localhost:3000'}/task/${taskId}|View Task Details>`
+                    text: `🔗 <${process.env.FRONTEND_URL || 'http://localhost:3001'}/task/${taskId}|View Task Details>`
                 }
             }
         ];

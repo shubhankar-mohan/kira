@@ -38,26 +38,15 @@ Light mode only - following the exact design specification
 /* ===== LOGO SECTION ===== */
 .logo-section {
     text-align: center;
-    margin-bottom: 32px;
+    /* margin-bottom: 32px; */
 }
 
-.logo-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+.kira-logo {
+    width: 180px;
+    height: auto;
+    max-width: 100%;
     display: block;
-}
-
-.app-title {
-    font-size: 28px;
-    font-weight: 700;
-    color: #1f2937;
-    margin-bottom: 8px;
-}
-
-.app-subtitle {
-    font-size: 16px;
-    color: #6b7280;
-    font-weight: 400;
+    margin: 0 auto;
 }
 
 /* ===== FORM STYLES ===== */
@@ -245,12 +234,8 @@ Light mode only - following the exact design specification
         margin: 20px;
     }
     
-    .app-title {
-        font-size: 24px;
-    }
-    
-    .logo-icon {
-        font-size: 40px;
+    .kira-logo {
+        width: 140px;
     }
     
     .demo-account {

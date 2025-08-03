@@ -678,14 +678,7 @@ class TaskBoardManager {
                     ${sprintWeek ? `<span class="sprint-week sprint-${this.getSprintClass(sprintWeek)}">${sprintWeek}</span>` : ''}
                 </div>
                 <div class="task-actions">
-                    <button class="action-btn touch-target" title="View" data-action="openTaskDetails" data-task-id="${task.id}" aria-label="View task details">
-                        <span class="action-icon">👁</span>
-                        <span class="action-text">View</span>
-                    </button>
-                    <button class="action-btn touch-target" title="Edit" data-action="editTask" data-task-id="${task.id}" aria-label="Edit task">
-                        <span class="action-icon">✏</span>
-                        <span class="action-text">Edit</span>
-                    </button>
+                    <img src="assets/copy-icon.jpg" alt="Copy task path" class="copy-icon" data-action="copyTaskPath" data-task-id="${task.id}" title="Copy task path" style="cursor: pointer;">
                 </div>
             </div>
             <div class="task-title" data-action="openTaskDetails" data-task-id="${task.id}" style="cursor: pointer;">${this.escapeHtml(task.task || 'Untitled Task')}</div>
@@ -704,10 +697,10 @@ class TaskBoardManager {
             ` : ''}
         `;
 
-        // Add click handler to the entire card (excluding action buttons)
+        // Add click handler to the entire card (excluding copy icon)
         card.addEventListener('click', (e) => {
-            // Don't open details if clicking on action buttons
-            if (!e.target.closest('.task-actions') && !e.target.closest('.action-btn')) {
+            // Don't open details if clicking on copy icon
+            if (!e.target.closest('.task-actions') && !e.target.closest('.copy-icon')) {
                 e.preventDefault();
                 e.stopPropagation();
                 openTaskDetails(task.id);

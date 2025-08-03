@@ -857,7 +857,7 @@ class SlackService {
     }
 
     buildTaskCreatedBlocks(task) {
-        const taskUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/task/${task.id}`;
+        const taskUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/task/${task.id}`;
         
         return [
             {
@@ -1043,7 +1043,7 @@ Create tasks by mentioning @kira: \`@kira Fix login bug @john @jane P1 Feature d
             for (const slackUserId of assignedUsers) {
                 const user = await this.getUserBySlackId(slackUserId);
                 if (user) {
-                    const taskUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/task/${task.id}`;
+                    const taskUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/task/${task.id}`;
                     
                     await client.chat.postMessage({
                         channel: slackUserId, // DM to the user

@@ -153,6 +153,9 @@ class EventHandlerManager {
                 case 'editTask':
                     if (taskId) this.editTask(taskId);
                     break;
+                case 'copyTaskPath':
+                    if (taskId) this.copyTaskPath(taskId);
+                    break;
                 case 'saveTaskDetailsFromPage':
                     this.saveTaskDetailsFromPage();
                     break;
@@ -351,6 +354,51 @@ class EventHandlerManager {
         this.openTaskDetails(taskId);
     }
 
+    copyTaskPath(taskId) {
+        console.log('copyTaskPath called with taskId:', taskId);
+        
+        // Find the task to get its details
+        let task = null;
+        if (window.taskManager && window.taskManager.tasks) {
+            task = window.taskManager.tasks.find(t => t.id === taskId);
+        }
+        
+        if (!task) {
+            console.error('Task not found for ID:', taskId);
+            return;
+        }
+        
+        // Create the task path/URL using config
+        const taskPath = window.config ? window.config.getTaskUrl(taskId) : `http://localhost:3001/task/${taskId}`;
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(taskPath).then(() => {
+            // Show success notification
+            if (window.taskManager && window.taskManager.showNotification) {
+                window.taskManager.showNotification('Task path copied to clipboard!', 'success');
+            } else {
+                // Fallback alert
+                alert('Task path copied to clipboard!');
+            }
+            console.log('Task path copied:', taskPath);
+        }).catch(err => {
+            console.error('Failed to copy task path:', err);
+            // Fallback: select and copy manually
+            const textArea = document.createElement('textarea');
+            textArea.value = taskPath;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            if (window.taskManager && window.taskManager.showNotification) {
+                window.taskManager.showNotification('Task path copied to clipboard!', 'success');
+            } else {
+                alert('Task path copied to clipboard!');
+            }
+        });
+    }
+
     saveTaskDetailsFromPage() {
         if (window.app) {
             window.app.saveTaskDetailsFromPage();
@@ -395,6 +443,7 @@ class EventHandlerManager {
             'saveTaskDetails': 'taskManager',
             'openTaskDetails': 'modalManager',
             'editTask': 'modalManager',
+            'copyTaskPath': 'taskManager',
             'showCreateTaskModal': 'taskManager',
             'createSprint': 'uiManager',
             'showCreateSprintModal': 'uiManager',

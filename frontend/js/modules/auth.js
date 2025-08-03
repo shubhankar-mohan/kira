@@ -40,12 +40,20 @@ class AuthManager {
         const email = this.currentUser.email;
         const role = this.currentUser.role;
         
-        document.getElementById('profileName').textContent = name;
-        document.getElementById('profileRole').textContent = role.toLowerCase();
-        
-        // Set avatar initial
+        // Safely update profile elements if they exist
+        const profileNameElement = document.getElementById('profileName');
+        const profileRoleElement = document.getElementById('profileRole');
         const avatarElement = document.getElementById('profileAvatar');
-        avatarElement.textContent = name.charAt(0).toUpperCase();
+        
+        if (profileNameElement) {
+            profileNameElement.textContent = name;
+        }
+        if (profileRoleElement) {
+            profileRoleElement.textContent = role.toLowerCase();
+        }
+        if (avatarElement) {
+            avatarElement.textContent = name.charAt(0).toUpperCase();
+        }
         
         // Hide user management for non-admins
         if (this.currentUser.role !== 'Admin') {

@@ -13,7 +13,7 @@ const slackRouter = require('./routes/slack');
 const { router: authRouter } = require('./routes/auth');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8000;
 
 // Security middleware with custom CSP
 app.use(helmet({
@@ -35,7 +35,7 @@ app.use(helmet({
 
 // CORS configuration
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
     credentials: true
 }));
 
