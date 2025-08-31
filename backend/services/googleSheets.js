@@ -64,7 +64,7 @@ class GoogleSheetsService {
         console.log('👥 Creating Users sheet...');
         const sheet = await this.doc.addSheet({ 
             title: 'Users',
-            headerValues: ['ID', 'Email', 'Name', 'Role', 'Password Hash', 'Created Date', 'Active']
+            headerValues: ['ID', 'Email', 'Name', 'Role', 'Password Hash', 'Created Date', 'Active', 'Slack Name', 'Slack ID']
         });
         return sheet;
     }
@@ -73,7 +73,7 @@ class GoogleSheetsService {
         console.log('🏃 Creating Sprints sheet...');
         const sheet = await this.doc.addSheet({ 
             title: 'Sprints',
-            headerValues: ['ID', 'Sprint Week', 'Goal', 'Year', 'Status', 'Start Date', 'End Date', 'Created By']
+            headerValues: ['ID', 'Sprint Week', 'Goal', 'Year', 'Status', 'Start Date', 'End Date', 'Created By', 'Current Sprint']
         });
         return sheet;
     }
@@ -204,7 +204,10 @@ class GoogleSheetsService {
             role: row.get('Role'),
             passwordHash: row.get('Password Hash'),
             createdDate: row.get('Created Date'),
-            active: row.get('Active') !== 'false'
+            active: row.get('Active') !== 'false',
+            slackName: row.get('Slack Name') || '',
+            slackId: row.get('Slack ID') || '',
+            status: row.get('Active') !== 'false' ? 'Active' : 'Inactive'
         }));
     }
 
@@ -227,6 +230,46 @@ class GoogleSheetsService {
         return { ...userData, id: userId };
     }
 
+    async updateUser(userId, userData) {
+        await this.initialize();
+        
+        const rows = await this.sheets.users.getRows();
+        const userRow = rows.find(row => row.get('ID') === userId || row.get('Email') === userId);
+        
+        if (!userRow) {
+            throw new Error('User not found');
+        }
+
+        // Update the row
+        userRow.set('Name', userData.name);
+        userRow.set('Email', userData.email);
+        userRow.set('Role', userData.role);
+        if (userData.slackName) userRow.set('Slack Name', userData.slackName);
+        if (userData.slackId) userRow.set('Slack ID', userData.slackId);
+        if (userData.status) userRow.set('Active', userData.status === 'Active' ? 'true' : 'false');
+        
+        await userRow.save();
+        
+        console.log(`✅ User updated: ${userData.email}`);
+        return { ...userData, id: userId };
+    }
+
+    async deleteUser(userId) {
+        await this.initialize();
+        
+        const rows = await this.sheets.users.getRows();
+        const userRow = rows.find(row => row.get('ID') === userId || row.get('Email') === userId);
+        
+        if (!userRow) {
+            throw new Error('User not found');
+        }
+
+        await userRow.delete();
+        
+        console.log(`✅ User deleted: ${userId}`);
+        return true;
+    }
+
     // Sprint operations
     async getSprints() {
         await this.initialize();
@@ -235,12 +278,14 @@ class GoogleSheetsService {
         return rows.map(row => ({
             id: row.get('ID'),
             name: row.get('Sprint Week'),
+            sprintWeek: row.get('Sprint Week'), // Also include for compatibility
             goal: row.get('Goal'),
             year: parseInt(row.get('Year')) || new Date().getFullYear() % 100,
             status: row.get('Status'),
             startDate: row.get('Start Date'),
             endDate: row.get('End Date'),
-            createdBy: row.get('Created By')
+            createdBy: row.get('Created By'),
+            isCurrent: row.get('Current Sprint') === 'Yes'
         }));
     }
 
@@ -257,10 +302,39 @@ class GoogleSheetsService {
             'Status': sprintData.status || 'Planning',
             'Start Date': sprintData.startDate || '',
             'End Date': sprintData.endDate || '',
-            'Created By': sprintData.createdBy || 'System'
+            'Created By': sprintData.createdBy || 'System',
+            'Current Sprint': sprintData.isCurrent ? 'Yes' : ''
         });
         
         console.log(`✅ Sprint created: ${sprintData.name}`);
+        return { ...sprintData, id: sprintId };
+    }
+
+    async updateSprint(sprintId, sprintData) {
+        await this.initialize();
+        
+        const rows = await this.sheets.sprints.getRows();
+        const sprintRow = rows.find(row => row.get('ID') === sprintId || row.get('Sprint Week') === sprintId);
+        
+        if (!sprintRow) {
+            throw new Error('Sprint not found');
+        }
+
+        // Allow multiple current sprints - don't unmark others
+
+        // Update the target sprint row
+        if (sprintData.name) sprintRow.set('Sprint Week', sprintData.name);
+        if (sprintData.goal) sprintRow.set('Goal', sprintData.goal);
+        if (sprintData.status) sprintRow.set('Status', sprintData.status);
+        if (sprintData.startDate) sprintRow.set('Start Date', sprintData.startDate);
+        if (sprintData.endDate) sprintRow.set('End Date', sprintData.endDate);
+        if (sprintData.isCurrent !== undefined) {
+            sprintRow.set('Current Sprint', sprintData.isCurrent ? 'Yes' : '');
+        }
+        
+        await sprintRow.save();
+        
+        console.log(`✅ Sprint updated: ${sprintData.name || sprintId}`);
         return { ...sprintData, id: sprintId };
     }
 

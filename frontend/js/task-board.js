@@ -20,10 +20,11 @@ class TaskBoardManager {
         this.allTasks = [];
         this.filteredTasks = [];
         this.activeFilters = {
-            sprint: [],
+            sprint: ['current'], // Default to current sprint filter
             assignee: [],
             assignedBy: [],
-            priority: []
+            priority: [],
+            currentSprintOnly: false
         };
         this.init();
     }
@@ -423,8 +424,36 @@ class TaskBoardManager {
 
     // Apply filters and render filtered tasks
     applyFilters() {
+        console.log('🔍 Applying filters. Active filters:', this.activeFilters);
+        console.log('🔍 Sprint filter values:', this.activeFilters.sprint);
+        console.log('🔍 Assignee filter values:', this.activeFilters.assignee);
+        console.log('🔍 Priority filter values:', this.activeFilters.priority);
+        console.log('📋 Total tasks before filtering:', this.allTasks.length);
+        
         this.filteredTasks = this.filterTasks(this.allTasks);
+        
+        console.log('📋 Tasks after filtering:', this.filteredTasks.length);
         this.renderFilteredTasks();
+    }
+
+    // Toggle current sprint filter
+    toggleCurrentSprintFilter() {
+        this.activeFilters.currentSprintOnly = !this.activeFilters.currentSprintOnly;
+        
+        const toggleButton = document.getElementById('currentSprintToggle');
+        const toggleText = document.getElementById('currentSprintToggleText');
+        
+        if (this.activeFilters.currentSprintOnly) {
+            toggleButton.classList.add('btn-primary');
+            toggleButton.classList.remove('btn-secondary');
+            toggleText.textContent = 'Show All Sprints';
+        } else {
+            toggleButton.classList.add('btn-secondary');
+            toggleButton.classList.remove('btn-primary');
+            toggleText.textContent = 'Show Current Sprint';
+        }
+        
+        this.applyFilters();
     }
 
     // Filter tasks based on active filters
@@ -433,26 +462,108 @@ class TaskBoardManager {
             // Add null check for task
             if (!task) return false;
             
+            // Current sprint filter
+            if (this.activeFilters.currentSprintOnly) {
+                const currentSprint = window.taskManager.sprints.find(s => s.isCurrent);
+                if (currentSprint) {
+                    const taskSprint = task.sprint || task.sprintWeek || '';
+                    const currentSprintName = currentSprint.sprintWeek || currentSprint.name || '';
+                    if (taskSprint !== currentSprintName) {
+                        return false;
+                    }
+                } else {
+                    // No current sprint marked, show no tasks
+                    return false;
+                }
+            }
+            
             // Sprint filter
             if (this.activeFilters.sprint.length > 0 && !this.activeFilters.sprint.includes('all')) {
                 const taskSprint = task.sprint || task.sprintWeek || '';
-                if (!this.activeFilters.sprint.includes(taskSprint)) {
-                    return false;
+                
+                // Handle "current" filter option
+                if (this.activeFilters.sprint.includes('current')) {
+                    // Check both taskManager and sprintManager for current sprints
+                    let currentSprints = [];
+                    if (window.taskManager && window.taskManager.sprints) {
+                        currentSprints = window.taskManager.sprints.filter(s => s.isCurrent);
+                    }
+                    if (currentSprints.length === 0 && window.sprintManager && window.sprintManager.sprints) {
+                        currentSprints = window.sprintManager.sprints.filter(s => s.isCurrent);
+                    }
+                    
+                    const currentSprintWeeks = currentSprints.map(s => s.sprintWeek || s.name || s.week);
+                    console.log('🎯 Current sprint filter active. Current sprints:', currentSprintWeeks, 'Task sprint:', taskSprint);
+                    console.log('🎯 Available sprints in taskManager:', window.taskManager?.sprints?.map(s => ({week: s.sprintWeek, isCurrent: s.isCurrent})));
+                    
+                    if (currentSprintWeeks.length === 0) {
+                        console.log('⚠️ No current sprints found - showing no tasks');
+                        return false;
+                    }
+                    
+                    if (!currentSprintWeeks.includes(taskSprint)) {
+                        return false;
+                    }
+                } else {
+                    // Regular sprint filtering
+                    let matchFound = false;
+                    for (const filterSprint of this.activeFilters.sprint) {
+                        // Extract sprint week from current sprint labels like "🎯 W26 (Current)"
+                        const sprintWeek = filterSprint.includes('(Current)') ? 
+                            filterSprint.replace(/🎯\s*/, '').replace(/\s*\(Current\)/, '') : 
+                            filterSprint;
+                        
+                        if (taskSprint === sprintWeek) {
+                            matchFound = true;
+                            break;
+                        }
+                    }
+                    if (!matchFound) {
+                        return false;
+                    }
                 }
             }
 
-            // Assignee filter
+            // Assignee filter - handle comma-separated values
             if (this.activeFilters.assignee.length > 0 && !this.activeFilters.assignee.includes('all')) {
                 const taskAssignee = task.assignedTo || task.assignee || '';
-                if (!this.activeFilters.assignee.includes(taskAssignee)) {
+                let assigneeMatch = false;
+                
+                if (typeof taskAssignee === 'string') {
+                    const assignees = taskAssignee.split(/[,;|]/)
+                        .map(name => name.trim())
+                        .filter(name => name && name !== 'Unassigned');
+                    
+                    assigneeMatch = assignees.some(assignee => 
+                        this.activeFilters.assignee.includes(assignee)
+                    );
+                } else {
+                    assigneeMatch = this.activeFilters.assignee.includes(taskAssignee);
+                }
+                
+                if (!assigneeMatch) {
                     return false;
                 }
             }
 
-            // Assigned By filter
+            // Assigned By filter - handle comma-separated values
             if (this.activeFilters.assignedBy.length > 0 && !this.activeFilters.assignedBy.includes('all')) {
                 const taskAssignedBy = task.assignedBy || task.createdBy || '';
-                if (!this.activeFilters.assignedBy.includes(taskAssignedBy)) {
+                let creatorMatch = false;
+                
+                if (typeof taskAssignedBy === 'string') {
+                    const creators = taskAssignedBy.split(/[,;|]/)
+                        .map(name => name.trim())
+                        .filter(name => name && name !== 'Unassigned');
+                    
+                    creatorMatch = creators.some(creator => 
+                        this.activeFilters.assignedBy.includes(creator)
+                    );
+                } else {
+                    creatorMatch = this.activeFilters.assignedBy.includes(taskAssignedBy);
+                }
+                
+                if (!creatorMatch) {
                     return false;
                 }
             }
@@ -570,18 +681,73 @@ class TaskBoardManager {
             priority: ['P0', 'P1', 'P2', 'Backlog']
         };
 
-        // Extract unique values from tasks
+        // Get sprint options from sprints data (not just from tasks)
+        if (window.taskManager && window.taskManager.sprints) {
+            const currentSprints = window.taskManager.sprints.filter(s => s.isCurrent);
+            const otherSprints = window.taskManager.sprints.filter(s => !s.isCurrent);
+            
+            // Add current sprints first with visual indicator
+            currentSprints.forEach(sprint => {
+                options.sprint.push(`🎯 ${sprint.sprintWeek} (Current)`);
+            });
+            
+            // Add other sprints
+            otherSprints.forEach(sprint => {
+                options.sprint.push(sprint.sprintWeek);
+            });
+        }
+
+        // Also add any sprint values from tasks that might not be in sprints list
         this.allTasks.forEach(task => {
             if (!task) return;
             
-            if ((task.sprint || task.sprintWeek) && !options.sprint.includes(task.sprint || task.sprintWeek)) {
-                options.sprint.push(task.sprint || task.sprintWeek);
+            // Handle sprint values
+            if (task.sprint || task.sprintWeek) {
+                const sprintValue = task.sprint || task.sprintWeek;
+                const currentSprintLabel = `🎯 ${sprintValue} (Current)`;
+                
+                // Only add if not already in the list (either as current or regular)
+                if (!options.sprint.includes(sprintValue) && !options.sprint.includes(currentSprintLabel)) {
+                    options.sprint.push(sprintValue);
+                }
             }
-            if ((task.assignedTo || task.assignee) && !options.assignee.includes(task.assignedTo || task.assignee)) {
-                options.assignee.push(task.assignedTo || task.assignee);
+            
+            // Handle assignee values - parse comma-separated values
+            if (task.assignedTo || task.assignee) {
+                const assignedValue = task.assignedTo || task.assignee;
+                if (typeof assignedValue === 'string') {
+                    // Split by common delimiters and clean up
+                    const assignees = assignedValue.split(/[,;|]/)
+                        .map(name => name.trim())
+                        .filter(name => name && name !== 'Unassigned' && name !== '');
+                    
+                    assignees.forEach(assignee => {
+                        if (!options.assignee.includes(assignee)) {
+                            options.assignee.push(assignee);
+                        }
+                    });
+                } else if (assignedValue && !options.assignee.includes(assignedValue)) {
+                    options.assignee.push(assignedValue);
+                }
             }
-            if ((task.assignedBy || task.createdBy) && !options.assignedBy.includes(task.assignedBy || task.createdBy)) {
-                options.assignedBy.push(task.assignedBy || task.createdBy);
+            
+            // Handle assigned by values - parse comma-separated values
+            if (task.assignedBy || task.createdBy) {
+                const createdByValue = task.assignedBy || task.createdBy;
+                if (typeof createdByValue === 'string') {
+                    // Split by common delimiters and clean up
+                    const creators = createdByValue.split(/[,;|]/)
+                        .map(name => name.trim())
+                        .filter(name => name && name !== 'Unassigned' && name !== '');
+                    
+                    creators.forEach(creator => {
+                        if (!options.assignedBy.includes(creator)) {
+                            options.assignedBy.push(creator);
+                        }
+                    });
+                } else if (createdByValue && !options.assignedBy.includes(createdByValue)) {
+                    options.assignedBy.push(createdByValue);
+                }
             }
         });
 
@@ -607,16 +773,21 @@ class TaskBoardManager {
         const dropdown = document.getElementById(filterId + 'Dropdown');
         if (!dropdown) return;
 
-        // Keep the "All" option and get its current state
+        // Keep the "All" and "current" options and preserve their states
         const allOption = dropdown.querySelector('[data-value="all"]');
+        const currentOption = dropdown.querySelector('[data-value="current"]');
         const allOptionHtml = allOption ? allOption.outerHTML : '';
+        const currentOptionHtml = currentOption ? currentOption.outerHTML : '';
         
         // Clear dropdown
         dropdown.innerHTML = '';
         
-        // Re-add the "All" option if it existed
+        // Re-add preserved options first
+        if (currentOptionHtml) {
+            dropdown.innerHTML += currentOptionHtml;
+        }
         if (allOptionHtml) {
-            dropdown.innerHTML = allOptionHtml;
+            dropdown.innerHTML += allOptionHtml;
         }
 
         // Add options
@@ -874,6 +1045,10 @@ function getSelectedValues(filterId) {
         if (cb.id.endsWith('-all')) {
             return 'all';
         }
+        // Handle the special "current" case
+        if (cb.id.endsWith('-current')) {
+            return 'current';
+        }
         // Extract the value from the checkbox ID
         const prefix = filterId + '-';
         let value = cb.id.replace(prefix, '');
@@ -931,8 +1106,16 @@ function updateFilterDisplayText() {
                 'priorityFilter': 'All Priorities'
             };
             display.textContent = allTexts[filterId];
+        } else if (selectedValues.includes('current') && filterId === 'sprintFilter') {
+            // Special handling for current sprint filter
+            display.textContent = '🎯 Current Sprint';
         } else if (selectedValues.length === 1) {
-            display.textContent = selectedValues[0];
+            // Handle special display text for certain values
+            if (selectedValues[0] === 'current' && filterId === 'sprintFilter') {
+                display.textContent = '🎯 Current Sprint';
+            } else {
+                display.textContent = selectedValues[0];
+            }
         } else {
             display.textContent = `${selectedValues.length} selected`;
         }

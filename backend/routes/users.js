@@ -166,4 +166,79 @@ router.get('/:id/tasks', async (req, res) => {
     }
 });
 
+// Update user
+router.put('/:id', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const updateData = req.body;
+
+        const users = await googleSheets.getUsers();
+        const userIndex = users.findIndex(u => u.id === userId || u.email === userId);
+        
+        if (userIndex === -1) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'User not found' 
+            });
+        }
+
+        // Update user data
+        const updatedUser = { ...users[userIndex], ...updateData };
+        const result = await googleSheets.updateUser(userId, updatedUser);
+        
+        // Remove password hash from response
+        const safeUser = {
+            id: result.id,
+            email: result.email,
+            name: result.name,
+            role: result.role,
+            slackName: result.slackName,
+            slackId: result.slackId,
+            status: result.status
+        };
+        
+        res.json({
+            success: true,
+            data: safeUser,
+            message: 'User updated successfully'
+        });
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// Delete user
+router.delete('/:id', async (req, res) => {
+    try {
+        const userId = req.params.id;
+
+        const users = await googleSheets.getUsers();
+        const user = users.find(u => u.id === userId || u.email === userId);
+        
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'User not found' 
+            });
+        }
+
+        await googleSheets.deleteUser(userId);
+        
+        res.json({
+            success: true,
+            message: 'User deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
 module.exports = router;

@@ -25,20 +25,41 @@ class TaskManager {
 
     async loadUsers() {
         try {
+            console.log('🔄 Loading users from API...');
+            console.log('API base URL:', api.baseURL);
+            console.log('Full URL:', `${window.location.origin}${api.baseURL}/users`);
+            
             const response = await api.getUsers();
+            console.log('API Response:', response);
+            console.log('Response structure:', Object.keys(response));
+            console.log('Response.data:', response.data);
+            console.log('Response.success:', response.success);
             this.users = response.data || [];
+            console.log('✅ Users loaded:', this.users.length);
         } catch (error) {
-            console.error('Error loading users:', error);
+            console.error('❌ Error loading users:', error);
+            console.error('Error details:', error.message);
             this.users = [];
         }
     }
 
     async loadSprints() {
         try {
+            console.log('🔄 Loading sprints from API...');
+            console.log('API base URL:', api.baseURL);
+            console.log('Full URL:', `${window.location.origin}${api.baseURL}/sprints`);
+            
             const response = await api.getSprints();
+            console.log('API Response:', response);
+            console.log('Response structure:', Object.keys(response));
+            console.log('Response.data:', response.data);
+            console.log('Response.success:', response.success);
             this.sprints = response.data || [];
+            console.log('✅ Sprints loaded:', this.sprints.length);
+            console.log('🔍 Sprints array after loading:', this.sprints);
         } catch (error) {
-            console.error('Error loading sprints:', error);
+            console.error('❌ Error loading sprints:', error);
+            console.error('Error details:', error.message);
             this.sprints = [];
         }
     }
@@ -82,7 +103,7 @@ class TaskManager {
         }
     }
 
-    loadPageContent(page) {
+    async loadPageContent(page) {
         switch (page) {
             case 'dashboard':
                 this.updateDashboard();
@@ -94,12 +115,21 @@ class TaskManager {
                 }
                 break;
             case 'sprints':
+                console.log('📊 Loading sprints page...');
+                // Refresh sprint data before rendering
+                await this.loadSprints();
+                console.log('🔄 After loadSprints, this.sprints:', this.sprints.length);
                 if (window.uiManager) {
+                    console.log('🎨 Rendering sprints UI...');
                     window.uiManager.renderSprints();
                 }
                 break;
             case 'users':
+                console.log('👥 Loading users page...');
+                // Refresh user data before rendering
+                await this.loadUsers();
                 if (window.uiManager) {
+                    console.log('🎨 Rendering users UI...');
                     window.uiManager.renderUsers();
                 }
                 break;
@@ -195,22 +225,123 @@ class TaskManager {
     }
 
     updateDashboard() {
-        console.log('Updating dashboard...');
+        console.log('🏠 Updating dashboard with current sprint focus...');
         
-        const totalTasks = this.tasks.length;
-        const inProgressTasks = this.tasks.filter(t => t.status === 'In progress').length;
-        const completedTasks = this.tasks.filter(t => t.status === 'Done').length;
-        const blockedTasks = this.tasks.filter(t => t.status && t.status.includes('Blocked')).length;
+        // Find current sprint(s)
+        const currentSprints = this.sprints.filter(s => s.isCurrent || s.status === 'Active');
+        const currentSprintWeeks = currentSprints.map(s => s.week || s.sprintWeek);
         
-        const totalTasksElement = document.getElementById('totalTasks');
-        const inProgressTasksElement = document.getElementById('inProgressTasks');
-        const completedTasksElement = document.getElementById('completedTasks');
-        const blockedTasksElement = document.getElementById('blockedTasks');
+        console.log('📊 Current sprints:', currentSprintWeeks);
         
-        if (totalTasksElement) totalTasksElement.textContent = totalTasks;
-        if (inProgressTasksElement) inProgressTasksElement.textContent = inProgressTasks;
-        if (completedTasksElement) completedTasksElement.textContent = completedTasks;
-        if (blockedTasksElement) blockedTasksElement.textContent = blockedTasks;
+        // Filter tasks to current sprint only
+        const currentSprintTasks = this.tasks.filter(task => {
+            const taskSprint = task.sprintWeek || task.sprint;
+            return currentSprintWeeks.includes(taskSprint);
+        });
+        
+        console.log('📋 Current sprint tasks:', currentSprintTasks.length);
+        
+        // Update current sprint overview
+        this.updateCurrentSprintOverview(currentSprints, currentSprintTasks);
+        
+        // Update engineer performance table
+        this.updateEngineerPerformanceTable(currentSprintTasks);
+        
+        // Update current sprint stats
+        this.updateCurrentSprintStats(currentSprintTasks);
+    }
+    
+    updateCurrentSprintOverview(currentSprints, currentSprintTasks) {
+        const sprintName = currentSprints.length > 0 ? 
+            currentSprints.map(s => s.name || s.week).join(', ') : 
+            'No active sprint';
+        const totalTasks = currentSprintTasks.length;
+        const completedTasks = currentSprintTasks.filter(t => t.status === 'Done').length;
+        const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+        const sprintGoal = currentSprints.length > 0 ? 
+            (currentSprints[0].goal || 'No goal set') : 
+            'No goal set';
+        
+        // Update overview elements
+        const nameElement = document.getElementById('currentSprintName');
+        const progressElement = document.getElementById('currentSprintProgress');
+        const goalElement = document.getElementById('currentSprintGoal');
+        const statusElement = document.getElementById('currentSprintStatus');
+        
+        if (nameElement) nameElement.textContent = sprintName;
+        if (progressElement) progressElement.textContent = `${completedTasks}/${totalTasks} (${progressPercentage}%)`;
+        if (goalElement) goalElement.textContent = sprintGoal;
+        if (statusElement) {
+            const status = progressPercentage >= 80 ? 'Ahead of schedule' : 
+                          progressPercentage >= 60 ? 'On track' : 
+                          progressPercentage >= 40 ? 'Slightly behind' : 'Behind schedule';
+            statusElement.textContent = status;
+        }
+    }
+    
+    updateEngineerPerformanceTable(currentSprintTasks) {
+        const tableBody = document.getElementById('engineerPerformanceTable');
+        if (!tableBody) return;
+        
+        // Calculate stats per engineer
+        const engineerStats = {};
+        
+        this.users.forEach(user => {
+            const userTasks = currentSprintTasks.filter(task => {
+                const assignedTo = task.assignedTo || '';
+                return assignedTo.includes(user.email);
+            });
+            
+            const allocated = userTasks.length;
+            const completed = userTasks.filter(t => t.status === 'Done').length;
+            const inProgress = userTasks.filter(t => t.status === 'In progress').length;
+            const percentage = allocated > 0 ? Math.round((completed / allocated) * 100) : 0;
+            
+            if (allocated > 0) { // Only show engineers with tasks
+                engineerStats[user.email] = {
+                    name: user.name,
+                    allocated,
+                    completed,
+                    inProgress,
+                    percentage
+                };
+            }
+        });
+        
+        // Render engineer performance rows
+        const engineerRows = Object.values(engineerStats).map(stats => {
+            const percentageClass = stats.percentage >= 70 ? 'good' : 
+                                  stats.percentage >= 50 ? 'average' : 'poor';
+            
+            return `
+                <div class="engineer-row">
+                    <div class="engineer-name">${stats.name}</div>
+                    <div class="engineer-stat">${stats.allocated}</div>
+                    <div class="engineer-stat">${stats.completed}</div>
+                    <div class="engineer-stat">${stats.inProgress}</div>
+                    <div class="engineer-percentage ${percentageClass}">${stats.percentage}%</div>
+                </div>
+            `;
+        }).join('');
+        
+        tableBody.innerHTML = engineerRows || '<div class="engineer-row"><div class="engineer-name">No engineers assigned to current sprint</div></div>';
+    }
+    
+    updateCurrentSprintStats(currentSprintTasks) {
+        const totalTasks = currentSprintTasks.length;
+        const inProgressTasks = currentSprintTasks.filter(t => t.status === 'In progress').length;
+        const completedTasks = currentSprintTasks.filter(t => t.status === 'Done').length;
+        const blockedTasks = currentSprintTasks.filter(t => t.status && t.status.includes('Blocked')).length;
+        
+        const totalElement = document.getElementById('currentSprintTotalTasks');
+        const inProgressElement = document.getElementById('currentSprintInProgress');
+        const completedElement = document.getElementById('currentSprintCompleted');
+        const blockedElement = document.getElementById('currentSprintBlocked');
+        
+        if (totalElement) totalElement.textContent = totalTasks;
+        if (inProgressElement) inProgressElement.textContent = inProgressTasks;
+        if (completedElement) completedElement.textContent = completedTasks;
+        if (blockedElement) blockedElement.textContent = blockedTasks;
     }
 
     populateFilters() {
@@ -226,11 +357,33 @@ class TaskManager {
             });
         }
 
-        // Populate sprint filter
+        // Populate sprint filter with current sprints at top
         const sprintSelect = document.getElementById('taskSprint');
         if (sprintSelect) {
             sprintSelect.innerHTML = '<option value="">Backlog</option>';
-            this.sprints.forEach(sprint => {
+            
+            // Separate current and non-current sprints
+            const currentSprints = this.sprints.filter(sprint => sprint.isCurrent);
+            const otherSprints = this.sprints.filter(sprint => !sprint.isCurrent);
+            
+            // Add current sprints first (at top)
+            currentSprints.forEach(sprint => {
+                const option = document.createElement('option');
+                option.value = sprint.sprintWeek;
+                option.textContent = `🎯 ${sprint.sprintWeek} (Current)`;
+                sprintSelect.appendChild(option);
+            });
+            
+            // Add separator if there are current sprints
+            if (currentSprints.length > 0 && otherSprints.length > 0) {
+                const separator = document.createElement('option');
+                separator.disabled = true;
+                separator.textContent = '─────────────';
+                sprintSelect.appendChild(separator);
+            }
+            
+            // Add other sprints
+            otherSprints.forEach(sprint => {
                 const option = document.createElement('option');
                 option.value = sprint.sprintWeek;
                 option.textContent = sprint.sprintWeek;
@@ -309,4 +462,6 @@ class TaskManager {
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = TaskManager;
+} else if (typeof window !== 'undefined') {
+    window.TaskManager = TaskManager;
 } 

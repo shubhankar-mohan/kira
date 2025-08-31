@@ -108,10 +108,15 @@ class Router {
         }
         
         // Load page-specific content
-        if (window.app) {
+        console.log('🧭 Router: Loading page content for:', page);
+        if (window.taskManager) {
+            console.log('📋 Using taskManager.loadPageContent (async)');
+            window.taskManager.loadPageContent(page).catch(console.error);
+        } else if (window.app) {
+            console.log('📱 Using app.loadPageContent (fallback)');
             window.app.loadPageContent(page);
-        } else if (window.taskManager) {
-            window.taskManager.loadPageContent(page);
+        } else {
+            console.log('❌ No app or taskManager available for page loading');
         }
     }
 
@@ -138,4 +143,6 @@ class Router {
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Router;
+} else if (typeof window !== 'undefined') {
+    window.Router = Router;
 } 

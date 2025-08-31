@@ -230,4 +230,40 @@ router.get('/active/current', async (req, res) => {
     }
 });
 
+// Update sprint
+router.put('/:id', async (req, res) => {
+    try {
+        const sprintId = req.params.id;
+        const updateData = req.body;
+        
+        console.log(`🔄 Updating sprint ${sprintId} with data:`, updateData);
+
+        const sprints = await googleSheets.getSprints();
+        const sprintIndex = sprints.findIndex(s => s.id === sprintId || s.sprintWeek === sprintId);
+        
+        if (sprintIndex === -1) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Sprint not found' 
+            });
+        }
+
+        // Update sprint data  
+        const updatedSprint = { ...sprints[sprintIndex], ...updateData };
+        const result = await googleSheets.updateSprint(sprintId, updatedSprint);
+        
+        res.json({
+            success: true,
+            data: result,
+            message: 'Sprint updated successfully'
+        });
+    } catch (error) {
+        console.error('Error updating sprint:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
 module.exports = router;

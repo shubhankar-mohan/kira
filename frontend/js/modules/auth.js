@@ -175,4 +175,6 @@ class AuthManager {
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = AuthManager;
+} else if (typeof window !== 'undefined') {
+    window.AuthManager = AuthManager;
 } 

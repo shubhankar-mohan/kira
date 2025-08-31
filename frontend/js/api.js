@@ -162,6 +162,19 @@ class APIService {
         });
     }
 
+    async updateUser(userId, userData) {
+        return await this.request(`/users/${userId}`, {
+            method: 'PUT',
+            body: JSON.stringify(userData),
+        });
+    }
+
+    async deleteUser(userId) {
+        return await this.request(`/users/${userId}`, {
+            method: 'DELETE',
+        });
+    }
+
     async getUserTasks(userId) {
         return await this.request(`/users/${userId}/tasks`);
     }
@@ -178,6 +191,13 @@ class APIService {
     async createSprint(sprintData) {
         return await this.request('/sprints', {
             method: 'POST',
+            body: JSON.stringify(sprintData),
+        });
+    }
+
+    async updateSprint(sprintId, sprintData) {
+        return await this.request(`/sprints/${sprintId}`, {
+            method: 'PUT',
             body: JSON.stringify(sprintData),
         });
     }

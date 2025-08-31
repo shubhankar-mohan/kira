@@ -18,7 +18,7 @@ class ModalManager {
         // Close modal with Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                const openModal = document.querySelector('.modal.show, .task-modal-overlay');
+                const openModal = document.querySelector('.modal.show, .task-modal-overlay.show, .task-modal-overlay[style*="display: flex"]');
                 if (openModal) {
                     this.closeModal(openModal.id);
                 }
@@ -74,6 +74,12 @@ class ModalManager {
             });
         });
 
+        // Dynamic header updates for Create Task modal
+        this.setupCreateTaskModalDynamics();
+        
+        // Setup multi-select assignee dropdown
+        this.setupAssigneeMultiSelect();
+
         // Status and priority change handling
         const statusSelect = document.getElementById('detailTaskStatus');
         const prioritySelect = document.getElementById('detailTaskPriority');
@@ -100,6 +106,14 @@ class ModalManager {
     }
 
     handleAction(action, event) {
+        const sprintId = event.target.dataset.sprintId;
+        
+        // Prevent duplicate calls from event bubbling
+        if (action === 'toggleCurrentSprint') {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
         switch (action) {
             case 'showCreateTaskModal':
                 this.showModal('createTaskModal');
@@ -108,7 +122,7 @@ class ModalManager {
                 this.showModal('createUserModal');
                 break;
             case 'showCreateSprintModal':
-                this.showModal('createSprintModal');
+                this.showCreateSprintModal();
                 break;
             case 'saveTaskDetails':
                 this.saveTaskDetails();
@@ -117,7 +131,9 @@ class ModalManager {
                 window.taskManager.createTask();
                 break;
             case 'createUser':
-                window.userManager.createUser();
+                if (window.uiManager) {
+                    window.uiManager.createUser();
+                }
                 break;
             case 'createSprint':
                 window.sprintManager.createSprint();
@@ -125,7 +141,217 @@ class ModalManager {
             case 'syncData':
                 window.taskManager.syncData();
                 break;
+            case 'toggleCurrentSprint':
+                if (sprintId) {
+                    this.toggleCurrentSprint(sprintId);
+                }
+                break;
+            case 'toggleCurrentSprintFilter':
+                if (window.taskBoardManager) {
+                    window.taskBoardManager.toggleCurrentSprintFilter();
+                }
+                break;
+            case 'openUserDetails':
+                const userId = event.target.closest('[data-user-id]')?.dataset.userId;
+                if (userId) {
+                    this.openUserDetails(userId);
+                }
+                break;
+            case 'saveUserDetails':
+                this.saveUserDetails();
+                break;
+            case 'deleteUser':
+                const userIdToDelete = event.target.dataset.userId;
+                if (userIdToDelete) {
+                    this.deleteUser(userIdToDelete);
+                }
+                break;
         }
+    }
+
+    async toggleCurrentSprint(sprintId) {
+        console.log('🎯 toggleCurrentSprint called with sprintId:', sprintId);
+        console.log('🎯 Available sprints:', window.taskManager.sprints.map(s => ({ id: s.id, sprintWeek: s.sprintWeek, isCurrent: s.isCurrent })));
+        
+        // Prevent duplicate calls
+        if (this.isTogglingSprintStatus) {
+            console.log('⚠️ Already toggling sprint status, ignoring duplicate call');
+            return;
+        }
+        this.isTogglingSprintStatus = true;
+        
+        try {
+            const sprint = window.taskManager.sprints.find(s => (s.sprintWeek || s.name) === sprintId);
+            if (!sprint) {
+                console.error('❌ Sprint not found with ID:', sprintId);
+                window.uiManager.showNotification('Sprint not found', 'error');
+                this.isTogglingSprintStatus = false;
+                return;
+            }
+            
+            console.log('✅ Found sprint:', sprint);
+
+            // Update sprint status
+            const newStatus = !sprint.isCurrent;
+            console.log('🎯 Toggling sprint current status from', sprint.isCurrent, 'to', newStatus);
+
+            // Update in backend - only send the essential data to avoid conflicts
+            console.log('📡 Making API call to update sprint...');
+            const response = await api.updateSprint(sprint.sprintWeek || sprint.name, { 
+                isCurrent: newStatus 
+            });
+            console.log('📡 API response:', response);
+            
+            if (response.success) {
+                // Update local state after successful API call - only for this sprint
+                sprint.isCurrent = newStatus;
+                
+                window.uiManager.showNotification(
+                    `Sprint ${newStatus ? 'marked as current' : 'unmarked'}`, 
+                    'success'
+                );
+                
+                // Re-render sprints to update UI
+                window.uiManager.renderSprints();
+                
+                // Update dashboard with new current sprint data
+                window.taskManager.updateDashboard();
+                
+                // Update board filters if on board page
+                if (window.router.currentPage === 'board' && window.taskBoardManager) {
+                    window.taskBoardManager.populateFilters();
+                }
+            } else {
+                window.uiManager.showNotification('Failed to update sprint', 'error');
+            }
+        } catch (error) {
+            console.error('Error toggling current sprint:', error);
+            window.uiManager.showNotification('Failed to update sprint', 'error');
+        } finally {
+            this.isTogglingSprintStatus = false;
+        }
+    }
+
+    openUserDetails(userId) {
+        const user = window.taskManager.users.find(u => (u.id || u.email) === userId);
+        if (!user) {
+            window.uiManager.showNotification('User not found', 'error');
+            return;
+        }
+
+        // Populate form fields
+        document.getElementById('userDetailName').value = user.name || '';
+        document.getElementById('userDetailEmail').value = user.email || '';
+        document.getElementById('userDetailRole').value = user.role || 'Developer';
+        document.getElementById('userDetailSlackName').value = user.slackName || '';
+        document.getElementById('userDetailSlackId').value = user.slackId || '';
+        document.getElementById('userDetailStatus').value = user.status || 'Active';
+
+        // Store current user ID for saving
+        this.currentUserId = userId;
+
+        // Update delete button with user ID
+        const deleteButton = document.querySelector('[data-action="deleteUser"]');
+        if (deleteButton) {
+            deleteButton.dataset.userId = userId;
+        }
+
+        // Show modal
+        this.showModal('userDetailsModal');
+    }
+
+    async saveUserDetails() {
+        if (!this.currentUserId) return;
+
+        const userData = {
+            name: document.getElementById('userDetailName').value,
+            email: document.getElementById('userDetailEmail').value,
+            role: document.getElementById('userDetailRole').value,
+            slackName: document.getElementById('userDetailSlackName').value,
+            slackId: document.getElementById('userDetailSlackId').value,
+            status: document.getElementById('userDetailStatus').value
+        };
+
+        try {
+            window.uiManager.showLoading();
+            const response = await api.updateUser(this.currentUserId, userData);
+            
+            if (response.success) {
+                // Update local user data
+                const userIndex = window.taskManager.users.findIndex(u => (u.id || u.email) === this.currentUserId);
+                if (userIndex !== -1) {
+                    window.taskManager.users[userIndex] = { ...window.taskManager.users[userIndex], ...userData };
+                }
+                
+                window.uiManager.showNotification('User updated successfully!', 'success');
+                this.closeModal('userDetailsModal');
+                
+                // Re-render users
+                window.uiManager.renderUsers();
+            } else {
+                window.uiManager.showNotification('Failed to update user: ' + response.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error updating user:', error);
+            window.uiManager.showNotification('Failed to update user', 'error');
+        } finally {
+            window.uiManager.hideLoading();
+        }
+    }
+
+    async deleteUser(userId) {
+        if (!userId || !confirm('Are you sure you want to delete this user?')) return;
+
+        try {
+            window.uiManager.showLoading();
+            const response = await api.deleteUser(userId);
+            
+            if (response.success) {
+                // Remove from local data
+                window.taskManager.users = window.taskManager.users.filter(u => (u.id || u.email) !== userId);
+                
+                window.uiManager.showNotification('User deleted successfully!', 'success');
+                this.closeModal('userDetailsModal');
+                
+                // Re-render users
+                window.uiManager.renderUsers();
+            } else {
+                window.uiManager.showNotification('Failed to delete user: ' + response.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            window.uiManager.showNotification('Failed to delete user', 'error');
+        } finally {
+            window.uiManager.hideLoading();
+        }
+    }
+
+    showCreateSprintModal() {
+        // Auto-populate Monday to Friday dates
+        const dates = this.getNextMondayFriday();
+        document.getElementById('sprintStartDate').value = dates.monday;
+        document.getElementById('sprintEndDate').value = dates.friday;
+        
+        this.showModal('createSprintModal');
+    }
+
+    getNextMondayFriday() {
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+        
+        // Calculate next Monday
+        const nextMonday = new Date(today);
+        const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek; // If Sunday, next day is Monday
+        nextMonday.setDate(today.getDate() + daysUntilMonday);
+        
+        // Calculate Friday of the same week
+        const nextFriday = new Date(nextMonday);
+        nextFriday.setDate(nextMonday.getDate() + 4);
+        
+        return {
+            monday: nextMonday.toISOString().split('T')[0],
+            friday: nextFriday.toISOString().split('T')[0]
+        };
     }
 
     showModal(modalId) {
@@ -293,14 +519,36 @@ class ModalManager {
             });
         }
 
-        // Populate sprint dropdown
+        // Populate sprint dropdown with current sprints at top
         const sprintSelect = document.getElementById('detailTaskSprint');
-        if (sprintSelect && window.sprintManager && window.sprintManager.sprints) {
+        if (sprintSelect && window.taskManager && window.taskManager.sprints) {
             sprintSelect.innerHTML = '<option value="">No Sprint</option>';
-            window.sprintManager.sprints.forEach(sprint => {
+            
+            // Separate current and non-current sprints
+            const currentSprints = window.taskManager.sprints.filter(sprint => sprint.isCurrent);
+            const otherSprints = window.taskManager.sprints.filter(sprint => !sprint.isCurrent);
+            
+            // Add current sprints first (at top)
+            currentSprints.forEach(sprint => {
                 const option = document.createElement('option');
-                option.value = sprint.week;
-                option.textContent = `${sprint.week} - ${sprint.name}`;
+                option.value = sprint.sprintWeek;
+                option.textContent = `🎯 ${sprint.sprintWeek} (Current)`;
+                sprintSelect.appendChild(option);
+            });
+            
+            // Add separator if there are current sprints
+            if (currentSprints.length > 0 && otherSprints.length > 0) {
+                const separator = document.createElement('option');
+                separator.disabled = true;
+                separator.textContent = '─────────────';
+                sprintSelect.appendChild(separator);
+            }
+            
+            // Add other sprints
+            otherSprints.forEach(sprint => {
+                const option = document.createElement('option');
+                option.value = sprint.sprintWeek;
+                option.textContent = sprint.sprintWeek;
                 sprintSelect.appendChild(option);
             });
         }
@@ -604,6 +852,110 @@ class ModalManager {
             
             // Clear any stored changes
             localStorage.removeItem('taskChanges');
+        }
+    }
+
+    setupAssigneeMultiSelect() {
+        const assigneeDisplay = document.querySelector('[data-multiselect-id="taskAssigneeMulti"]');
+        const assigneeDropdown = document.getElementById('taskAssigneeDropdown');
+        const hiddenAssigneeInput = document.getElementById('taskAssignee');
+        
+        if (!assigneeDisplay || !assigneeDropdown) return;
+        
+        // Populate assignee options
+        const populateAssignees = () => {
+            if (!window.taskManager.users) return;
+            
+            assigneeDropdown.innerHTML = window.taskManager.users.map(user => `
+                <div class="multiselect-option" data-value="${user.email}">
+                    <input type="checkbox" id="assignee-${user.email}" data-assignee-checkbox>
+                    <label for="assignee-${user.email}">${user.name}</label>
+                </div>
+            `).join('');
+        };
+        
+        // Toggle dropdown
+        assigneeDisplay.addEventListener('click', () => {
+            assigneeDropdown.classList.toggle('show');
+            populateAssignees();
+        });
+        
+        // Handle checkbox changes
+        assigneeDropdown.addEventListener('change', (e) => {
+            if (e.target.dataset.assigneeCheckbox !== undefined) {
+                this.updateAssigneeSelection();
+            }
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.task-assignee-multiselect')) {
+                assigneeDropdown.classList.remove('show');
+            }
+        });
+    }
+    
+    updateAssigneeSelection() {
+        const checkboxes = document.querySelectorAll('#taskAssigneeDropdown [data-assignee-checkbox]:checked');
+        const selectedEmails = Array.from(checkboxes).map(cb => cb.closest('.multiselect-option').dataset.value);
+        const selectedNames = Array.from(checkboxes).map(cb => cb.nextElementSibling.textContent);
+        
+        // Update display text
+        const displayText = selectedNames.length > 0 ? 
+            (selectedNames.length === 1 ? selectedNames[0] : `${selectedNames.length} assignees`) :
+            'Select assignees';
+        
+        const multiselctText = document.querySelector('[data-multiselect-id="taskAssigneeMulti"] .multiselect-text');
+        if (multiselctText) {
+            multiselctText.textContent = displayText;
+        }
+        
+        // Update hidden input
+        const hiddenInput = document.getElementById('taskAssignee');
+        if (hiddenInput) {
+            hiddenInput.value = selectedEmails.join(',');
+        }
+    }
+
+    setupCreateTaskModalDynamics() {
+        const titleInput = document.getElementById('taskTitle');
+        const statusSelect = document.getElementById('taskStatus');
+        const prioritySelect = document.getElementById('taskPriority');
+        
+        if (titleInput || statusSelect || prioritySelect) {
+            const updateCreateTaskHeader = () => {
+                const title = titleInput?.value || 'Create New Task';
+                const status = statusSelect?.value || 'Not started';
+                const priority = prioritySelect?.value || 'P2';
+                
+                // Update header title
+                const headerTitle = document.querySelector('#createTaskModal .task-title');
+                if (headerTitle) {
+                    headerTitle.textContent = title;
+                }
+                
+                // Update status badge
+                const statusBadge = document.querySelector('#createTaskModal .status-badge');
+                if (statusBadge) {
+                    statusBadge.innerHTML = `
+                        <div class="status-indicator"></div>
+                        ${status.toUpperCase()}
+                    `;
+                    statusBadge.className = `status-badge status-${status.toLowerCase().replace(/[^a-z]/g, '-')}`;
+                }
+                
+                // Update priority badge
+                const priorityBadge = document.querySelector('#createTaskModal .priority-badge');
+                if (priorityBadge) {
+                    priorityBadge.textContent = `${priority} ${this.getPriorityLabel(priority)}`;
+                    priorityBadge.className = `priority-badge priority-${priority.toLowerCase()}`;
+                }
+            };
+            
+            // Add event listeners for dynamic updates
+            if (titleInput) titleInput.addEventListener('input', updateCreateTaskHeader);
+            if (statusSelect) statusSelect.addEventListener('change', updateCreateTaskHeader);
+            if (prioritySelect) prioritySelect.addEventListener('change', updateCreateTaskHeader);
         }
     }
 
