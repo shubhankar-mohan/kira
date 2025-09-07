@@ -283,13 +283,36 @@ class TaskManager {
         const tableBody = document.getElementById('engineerPerformanceTable');
         if (!tableBody) return;
         
+        console.log('🎯 Updating team performance table');
+        console.log('📋 Current sprint tasks:', currentSprintTasks.length);
+        console.log('👥 Available users:', this.users.length);
+        
         // Calculate stats per engineer
         const engineerStats = {};
         
+        // Get all unique assignees from current sprint tasks
+        const allAssignees = new Set();
+        currentSprintTasks.forEach(task => {
+            const assignedTo = task.assignedTo || '';
+            if (assignedTo) {
+                // Split by common delimiters and clean up
+                const assignees = assignedTo.split(/[,;|]/)
+                    .map(name => name.trim())
+                    .filter(name => name && name !== 'Unassigned' && name !== '');
+                assignees.forEach(assignee => allAssignees.add(assignee));
+            }
+        });
+        
+        console.log('📧 All assignees in current sprint:', Array.from(allAssignees));
+        
+        // Process each user
         this.users.forEach(user => {
             const userTasks = currentSprintTasks.filter(task => {
                 const assignedTo = task.assignedTo || '';
-                return assignedTo.includes(user.email);
+                // Check both email and name matching
+                return assignedTo.includes(user.email) || 
+                       assignedTo.includes(user.name) ||
+                       (user.name && assignedTo.toLowerCase().includes(user.name.toLowerCase()));
             });
             
             const allocated = userTasks.length;
@@ -305,8 +328,44 @@ class TaskManager {
                     inProgress,
                     percentage
                 };
+                console.log(`👤 ${user.name}: ${allocated} tasks (${completed} done, ${inProgress} in progress)`);
             }
         });
+        
+        // Also check for assignees that might not be in the users list
+        allAssignees.forEach(assigneeName => {
+            // Skip if already processed as a user
+            const isExistingUser = this.users.some(user => 
+                user.email === assigneeName || 
+                user.name === assigneeName ||
+                (user.name && assigneeName.toLowerCase().includes(user.name.toLowerCase()))
+            );
+            
+            if (!isExistingUser) {
+                const userTasks = currentSprintTasks.filter(task => {
+                    const assignedTo = task.assignedTo || '';
+                    return assignedTo.includes(assigneeName);
+                });
+                
+                const allocated = userTasks.length;
+                const completed = userTasks.filter(t => t.status === 'Done').length;
+                const inProgress = userTasks.filter(t => t.status === 'In progress').length;
+                const percentage = allocated > 0 ? Math.round((completed / allocated) * 100) : 0;
+                
+                if (allocated > 0) {
+                    engineerStats[assigneeName] = {
+                        name: assigneeName,
+                        allocated,
+                        completed,
+                        inProgress,
+                        percentage
+                    };
+                    console.log(`👤 ${assigneeName} (not in users list): ${allocated} tasks (${completed} done, ${inProgress} in progress)`);
+                }
+            }
+        });
+        
+        console.log('📊 Total engineers with tasks:', Object.keys(engineerStats).length);
         
         // Render engineer performance rows
         const engineerRows = Object.values(engineerStats).map(stats => {
@@ -324,7 +383,7 @@ class TaskManager {
             `;
         }).join('');
         
-        tableBody.innerHTML = engineerRows || '<div class="engineer-row"><div class="engineer-name">No engineers assigned to current sprint</div></div>';
+        tableBody.innerHTML = engineerRows || '<div class="engineer-row"><div class="engineer-name">No tasks assigned in current sprint</div><div class="engineer-stat">0</div><div class="engineer-stat">0</div><div class="engineer-stat">0</div><div class="engineer-percentage">0%</div></div>';
     }
     
     updateCurrentSprintStats(currentSprintTasks) {
@@ -366,11 +425,21 @@ class TaskManager {
             const currentSprints = this.sprints.filter(sprint => sprint.isCurrent);
             const otherSprints = this.sprints.filter(sprint => !sprint.isCurrent);
             
+            // Sort other sprints by week number (descending, so newest non-current sprints appear first)
+            otherSprints.sort((a, b) => {
+                const getWeekNumber = (sprint) => {
+                    const sprintWeek = sprint.name || sprint.sprintWeek || sprint.week || '';
+                    const match = sprintWeek.match(/W?(\d+)/);
+                    return match ? parseInt(match[1]) : 0;
+                };
+                return getWeekNumber(b) - getWeekNumber(a);
+            });
+            
             // Add current sprints first (at top)
             currentSprints.forEach(sprint => {
                 const option = document.createElement('option');
-                option.value = sprint.sprintWeek;
-                option.textContent = `🎯 ${sprint.sprintWeek} (Current)`;
+                option.value = sprint.sprintWeek || sprint.name;
+                option.textContent = `🎯 ${sprint.sprintWeek || sprint.name} (Current)`;
                 sprintSelect.appendChild(option);
             });
             
@@ -382,11 +451,11 @@ class TaskManager {
                 sprintSelect.appendChild(separator);
             }
             
-            // Add other sprints
+            // Add all other sprints (including past sprints)
             otherSprints.forEach(sprint => {
                 const option = document.createElement('option');
-                option.value = sprint.sprintWeek;
-                option.textContent = sprint.sprintWeek;
+                option.value = sprint.sprintWeek || sprint.name;
+                option.textContent = sprint.sprintWeek || sprint.name;
                 sprintSelect.appendChild(option);
             });
         }

@@ -33,6 +33,17 @@ class TaskBoardManager {
         this.setupHorizontalScrolling();
         this.setupExpandFunctionality();
         this.setupDragAndDrop();
+        this.setupSearch();
+    }
+
+    setupSearch() {
+        const searchBox = document.getElementById('taskSearchBox');
+        if (searchBox) {
+            searchBox.addEventListener('input', (e) => {
+                this.searchTerm = e.target.value;
+                this.applyFilters();
+            });
+        }
     }
 
     // Setup horizontal scrolling for the board
@@ -458,7 +469,7 @@ class TaskBoardManager {
 
     // Filter tasks based on active filters
     filterTasks(tasks) {
-        return tasks.filter(task => {
+        let filteredTasks = tasks.filter(task => {
             // Add null check for task
             if (!task) return false;
             
@@ -479,7 +490,7 @@ class TaskBoardManager {
             
             // Sprint filter
             if (this.activeFilters.sprint.length > 0 && !this.activeFilters.sprint.includes('all')) {
-                const taskSprint = task.sprint || task.sprintWeek || '';
+                const taskSprint = task.sprintWeek || task.sprint || '';
                 
                 // Handle "current" filter option
                 if (this.activeFilters.sprint.includes('current')) {
@@ -492,16 +503,32 @@ class TaskBoardManager {
                         currentSprints = window.sprintManager.sprints.filter(s => s.isCurrent);
                     }
                     
-                    const currentSprintWeeks = currentSprints.map(s => s.sprintWeek || s.name || s.week);
+                    // Map current sprints to their week identifiers - prioritize name property since that's what tasks use
+                    const currentSprintWeeks = currentSprints.map(s => s.name || s.sprintWeek || s.week).filter(w => w);
                     console.log('🎯 Current sprint filter active. Current sprints:', currentSprintWeeks, 'Task sprint:', taskSprint);
-                    console.log('🎯 Available sprints in taskManager:', window.taskManager?.sprints?.map(s => ({week: s.sprintWeek, isCurrent: s.isCurrent})));
+                    console.log('🎯 Available sprints in taskManager:', window.taskManager?.sprints?.map(s => ({name: s.name, sprintWeek: s.sprintWeek, isCurrent: s.isCurrent})));
+                    console.log('🎯 All sprints data:', window.taskManager?.sprints);
+                    
+                    // Determine which sprint weeks to use for filtering
+                    let sprintWeeksToCheck = currentSprintWeeks;
                     
                     if (currentSprintWeeks.length === 0) {
-                        console.log('⚠️ No current sprints found - showing no tasks');
-                        return false;
+                        console.log('⚠️ No current sprints found - checking if any sprints have status "Active"');
+                        // Fallback: check for sprints with "Active" status
+                        const activeSprintsByStatus = window.taskManager?.sprints?.filter(s => s.status === 'Active') || [];
+                        sprintWeeksToCheck = activeSprintsByStatus.map(s => s.name || s.sprintWeek || s.week).filter(w => w);
+                        console.log('🔄 Active sprints by status:', sprintWeeksToCheck);
+                        
+                        if (sprintWeeksToCheck.length === 0) {
+                            console.log('⚠️ No current or active sprints found - showing no tasks');
+                            return false;
+                        }
                     }
                     
-                    if (!currentSprintWeeks.includes(taskSprint)) {
+                    const isCurrentSprintTask = sprintWeeksToCheck.includes(taskSprint);
+                    console.log('🎯 Task sprint match check:', taskSprint, 'in', sprintWeeksToCheck, '=', isCurrentSprintTask);
+                    
+                    if (!isCurrentSprintTask) {
                         return false;
                     }
                 } else {
@@ -578,6 +605,13 @@ class TaskBoardManager {
 
             return true;
         });
+
+        // Apply search filter if search term exists
+        if (this.searchTerm && this.searchTerm.trim()) {
+            filteredTasks = this.searchTasks(filteredTasks, this.searchTerm.trim());
+        }
+
+        return filteredTasks;
     }
 
     // Render filtered and sorted tasks
@@ -686,14 +720,30 @@ class TaskBoardManager {
             const currentSprints = window.taskManager.sprints.filter(s => s.isCurrent);
             const otherSprints = window.taskManager.sprints.filter(s => !s.isCurrent);
             
-            // Add current sprints first with visual indicator
-            currentSprints.forEach(sprint => {
-                options.sprint.push(`🎯 ${sprint.sprintWeek} (Current)`);
+            // Sort other sprints by week number (descending, so newest non-current sprints appear first)
+            otherSprints.sort((a, b) => {
+                const getWeekNumber = (sprint) => {
+                    const sprintWeek = sprint.name || sprint.sprintWeek || sprint.week || '';
+                    const match = sprintWeek.match(/W?(\d+)/);
+                    return match ? parseInt(match[1]) : 0;
+                };
+                return getWeekNumber(b) - getWeekNumber(a);
             });
             
-            // Add other sprints
+            // Add current sprints first with visual indicator
+            currentSprints.forEach(sprint => {
+                const sprintWeek = sprint.name || sprint.sprintWeek || sprint.week;
+                if (sprintWeek) {
+                    options.sprint.push(`🎯 ${sprintWeek} (Current)`);
+                }
+            });
+            
+            // Add all other sprints (including past sprints)
             otherSprints.forEach(sprint => {
-                options.sprint.push(sprint.sprintWeek);
+                const sprintWeek = sprint.name || sprint.sprintWeek || sprint.week;
+                if (sprintWeek) {
+                    options.sprint.push(sprintWeek);
+                }
             });
         }
 
@@ -1049,15 +1099,33 @@ function getSelectedValues(filterId) {
         if (cb.id.endsWith('-current')) {
             return 'current';
         }
-        // Extract the value from the checkbox ID
+        
+        // For other values, get the original text from the label instead of parsing the ID
+        const label = cb.nextElementSibling;
+        if (label && label.tagName === 'LABEL') {
+            let value = label.textContent.trim();
+            
+            // For sprint filters, extract the actual sprint week from labels like "🎯 W27 (Current)"
+            if (filterId === 'sprintFilter') {
+                // Remove emoji and (Current) suffix, keep just the sprint week
+                value = value.replace(/🎯\s*/, '').replace(/\s*\(Current\)/, '').trim();
+            }
+            
+            // For priority filters, extract just the priority code from labels like "P0 - Critical"
+            if (filterId === 'priorityFilter') {
+                // Extract priority code (P0, P1, P2, Backlog) from labels like "P0 - Critical"
+                const match = value.match(/^(P\d+|Backlog)/);
+                if (match) {
+                    value = match[1];
+                }
+            }
+            
+            return value;
+        }
+        
+        // Fallback to ID parsing if label not found
         const prefix = filterId + '-';
         let value = cb.id.replace(prefix, '');
-        // Handle special cases like priority values
-        if (filterId === 'priorityFilter') {
-            if (value.startsWith('priority-')) {
-                value = value.replace('priority-', '');
-            }
-        }
         return value;
     });
 }

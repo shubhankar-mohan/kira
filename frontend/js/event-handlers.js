@@ -111,6 +111,7 @@ class EventHandlerManager {
         // Filter checkboxes - use event delegation for dynamically created elements
         document.addEventListener('change', (e) => {
             if (e.target.matches('input[type="checkbox"][data-filter]')) {
+                this.handleFilterCheckboxChange(e);
                 this.applyFilters();
             }
         });
@@ -192,6 +193,20 @@ class EventHandlerManager {
                 case 'applyFilters':
                     this.applyFilters();
                     break;
+                case 'closeModal':
+                    const modalId = actionBtn.dataset.modalId;
+                    if (modalId && window.modalManager) {
+                        window.modalManager.closeModal(modalId);
+                    }
+                    break;
+                case 'closeTaskModal':
+                    if (window.modalManager) {
+                        window.modalManager.closeTaskModal();
+                    }
+                    break;
+                case 'openUserProfile':
+                    this.openUserProfile();
+                    break;
                 default:
                     console.warn('Unknown action:', action);
             }
@@ -218,13 +233,22 @@ class EventHandlerManager {
     setupProfileHandlers() {
         const profileButton = document.querySelector('.profile-button');
         if (profileButton) {
-            profileButton.addEventListener('click', () => {
+            profileButton.addEventListener('click', (e) => {
+                e.stopPropagation();
                 console.log('Profile button clicked');
                 this.toggleProfileMenu();
             });
         } else {
             console.log('Profile button not found');
         }
+
+        // Close profile menu when clicking outside
+        document.addEventListener('click', (e) => {
+            const profileMenu = document.querySelector('.profile-menu');
+            if (profileMenu && !profileMenu.contains(e.target)) {
+                profileMenu.classList.remove('open');
+            }
+        });
 
         // Note: Logout button is now handled by event delegation in setupTaskActionHandlers()
     }
@@ -434,6 +458,89 @@ class EventHandlerManager {
         } else if (window.logout) {
             window.logout();
         }
+    }
+
+    toggleProfileMenu() {
+        if (window.uiManager) {
+            window.uiManager.toggleProfileMenu();
+        } else {
+            console.error('UIManager not available');
+        }
+    }
+
+    openUserProfile() {
+        // Close the profile dropdown first
+        const profileMenu = document.querySelector('.profile-menu');
+        if (profileMenu) {
+            profileMenu.classList.remove('open');
+        }
+
+        // Get current user info
+        const currentUser = window.authManager?.currentUser;
+        if (currentUser && window.modalManager) {
+            // Find the user in the users list and open their details
+            const user = window.taskManager?.users?.find(u => u.email === currentUser.email);
+            if (user) {
+                window.modalManager.openUserDetails(user.id);
+            } else {
+                console.warn('Current user not found in users list');
+                // Show a notification or basic profile info
+                if (window.uiManager) {
+                    window.uiManager.showNotification('Profile details not available', 'info');
+                }
+            }
+        } else {
+            console.error('User profile not available');
+        }
+    }
+
+    handleFilterCheckboxChange(e) {
+        const checkbox = e.target;
+        const filterId = this.getFilterIdFromCheckbox(checkbox);
+        
+        if (!filterId) return;
+        
+        // If "ALL" was checked, uncheck all other options
+        if (checkbox.id.endsWith('-all') && checkbox.checked) {
+            const dropdown = document.getElementById(filterId + 'Dropdown');
+            if (dropdown) {
+                dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    if (!cb.id.endsWith('-all')) {
+                        cb.checked = false;
+                    }
+                });
+            }
+        }
+        // If any specific option was checked, uncheck "ALL"
+        else if (!checkbox.id.endsWith('-all') && checkbox.checked) {
+            const dropdown = document.getElementById(filterId + 'Dropdown');
+            if (dropdown) {
+                const allCheckbox = dropdown.querySelector('input[type="checkbox"][id$="-all"]');
+                if (allCheckbox) {
+                    allCheckbox.checked = false;
+                }
+            }
+        }
+        // If "ALL" was unchecked and no other options are selected, recheck "ALL"
+        else if (checkbox.id.endsWith('-all') && !checkbox.checked) {
+            const dropdown = document.getElementById(filterId + 'Dropdown');
+            if (dropdown) {
+                const otherCheckboxes = dropdown.querySelectorAll('input[type="checkbox"]:not([id$="-all"])');
+                const hasOtherChecked = Array.from(otherCheckboxes).some(cb => cb.checked);
+                if (!hasOtherChecked) {
+                    checkbox.checked = true; // Keep "ALL" checked if nothing else is selected
+                }
+            }
+        }
+    }
+
+    getFilterIdFromCheckbox(checkbox) {
+        // Find the dropdown container to determine filter ID
+        const dropdown = checkbox.closest('[id$="Dropdown"]');
+        if (dropdown) {
+            return dropdown.id.replace('Dropdown', '');
+        }
+        return null;
     }
 
     // Module availability checker

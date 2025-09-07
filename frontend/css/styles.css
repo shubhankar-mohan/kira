@@ -1664,6 +1664,50 @@ body {
     box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
 }
 
+.btn-sync-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    background: var(--info);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+    position: relative;
+}
+
+.btn-sync-icon:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+.btn-sync-icon:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+.btn-sync-icon .sync-icon {
+    transition: transform 0.3s ease;
+}
+
+.btn-sync-icon:hover .sync-icon {
+    transform: rotate(180deg);
+}
+
+.btn-sync-icon:active .sync-icon {
+    animation: spin 1s linear;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 .btn-modern.btn-secondary {
     background: white;
     color: var(--gray-700);
@@ -2533,11 +2577,33 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+    gap: 20px;
 }
 
 #boardSection .section-header h2 {
     margin: 0;
     color: var(--gray-900);
+    flex-shrink: 0;
+}
+
+.task-board-search {
+    position: relative;
+    flex: 1;
+    max-width: 400px;
+}
+
+.task-board-search .search-box {
+    width: 100%;
+    padding-right: 40px;
+}
+
+.task-board-search .search-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gray-400);
+    pointer-events: none;
 }
 
 #boardSection .section-header .btn {
@@ -2545,6 +2611,7 @@ body {
     align-items: center;
     gap: 8px;
     font-weight: 600;
+    flex-shrink: 0;
 }
 
 /* ===== BOARD FILTER DROPDOWN SCROLLING ===== */

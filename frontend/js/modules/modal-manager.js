@@ -528,11 +528,21 @@ class ModalManager {
             const currentSprints = window.taskManager.sprints.filter(sprint => sprint.isCurrent);
             const otherSprints = window.taskManager.sprints.filter(sprint => !sprint.isCurrent);
             
+            // Sort other sprints by week number (descending, so newest non-current sprints appear first)
+            otherSprints.sort((a, b) => {
+                const getWeekNumber = (sprint) => {
+                    const sprintWeek = sprint.name || sprint.sprintWeek || sprint.week || '';
+                    const match = sprintWeek.match(/W?(\d+)/);
+                    return match ? parseInt(match[1]) : 0;
+                };
+                return getWeekNumber(b) - getWeekNumber(a);
+            });
+            
             // Add current sprints first (at top)
             currentSprints.forEach(sprint => {
                 const option = document.createElement('option');
-                option.value = sprint.sprintWeek;
-                option.textContent = `🎯 ${sprint.sprintWeek} (Current)`;
+                option.value = sprint.sprintWeek || sprint.name;
+                option.textContent = `🎯 ${sprint.sprintWeek || sprint.name} (Current)`;
                 sprintSelect.appendChild(option);
             });
             
@@ -544,11 +554,11 @@ class ModalManager {
                 sprintSelect.appendChild(separator);
             }
             
-            // Add other sprints
+            // Add all other sprints (including past sprints)
             otherSprints.forEach(sprint => {
                 const option = document.createElement('option');
-                option.value = sprint.sprintWeek;
-                option.textContent = sprint.sprintWeek;
+                option.value = sprint.sprintWeek || sprint.name;
+                option.textContent = sprint.sprintWeek || sprint.name;
                 sprintSelect.appendChild(option);
             });
         }
