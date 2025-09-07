@@ -90,6 +90,12 @@ class TaskManager {
             console.log('Populating filters...');
             this.populateFilters();
             
+            // Initialize modal manager dropdowns after data is loaded
+            console.log('Initializing modal manager dropdowns...');
+            if (window.modalManager) {
+                window.modalManager.refreshCreateTaskDropdowns();
+            }
+            
             // Initialize filter display text
             if (typeof updateFilterDisplayText === 'function') {
                 updateFilterDisplayText();
@@ -226,15 +232,26 @@ class TaskManager {
 
     updateDashboard() {
         console.log('🏠 Updating dashboard with current sprint focus...');
+        console.log('📊 Available data - Tasks:', this.tasks?.length || 0, 'Users:', this.users?.length || 0, 'Sprints:', this.sprints?.length || 0);
+        
+        // Check if data is available
+        if (!this.tasks || !this.users || !this.sprints) {
+            console.warn('⚠️ Dashboard update called but data not fully loaded yet');
+            console.log('Available data:', {
+                tasks: !!this.tasks && this.tasks.length,
+                users: !!this.users && this.users.length,
+                sprints: !!this.sprints && this.sprints.length
+            });
+        }
         
         // Find current sprint(s)
-        const currentSprints = this.sprints.filter(s => s.isCurrent || s.status === 'Active');
+        const currentSprints = (this.sprints || []).filter(s => s.isCurrent || s.status === 'Active');
         const currentSprintWeeks = currentSprints.map(s => s.week || s.sprintWeek);
         
         console.log('📊 Current sprints:', currentSprintWeeks);
         
         // Filter tasks to current sprint only
-        const currentSprintTasks = this.tasks.filter(task => {
+        const currentSprintTasks = (this.tasks || []).filter(task => {
             const taskSprint = task.sprintWeek || task.sprint;
             return currentSprintWeeks.includes(taskSprint);
         });

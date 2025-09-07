@@ -668,6 +668,53 @@
     height: 16px;
 }
 
+/* Task Modal Multiselect Dropdown Styling */
+.task-modal-container .multiselect-dropdown {
+    max-height: 300px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    z-index: 10000; /* Ensure it appears above other modal content */
+}
+
+.task-modal-container .multiselect-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+
+.task-modal-container .multiselect-dropdown::-webkit-scrollbar-track {
+    background: var(--gray-100);
+    border-radius: 4px;
+}
+
+.task-modal-container .multiselect-dropdown::-webkit-scrollbar-thumb {
+    background: var(--gray-400);
+    border-radius: 4px;
+}
+
+.task-modal-container .multiselect-dropdown::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-500);
+}
+
+/* Task Assignee Multiselect specific styling */
+.task-assignee-multiselect {
+    position: relative;
+    z-index: 1000;
+}
+
+.task-assignee-multiselect .multiselect-dropdown {
+    top: 100%;
+    left: 0;
+    right: 0;
+    min-width: 100%;
+}
+
+/* Disabled multiselect options */
+.multiselect-option.disabled {
+    color: var(--gray-400);
+    cursor: not-allowed;
+    padding: 12px 16px;
+    font-style: italic;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
     .task-modal-container {

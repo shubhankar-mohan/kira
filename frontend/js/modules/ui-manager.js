@@ -206,6 +206,11 @@ class UIManager {
                 window.taskBoardManager.populateFilters();
             }
             
+            // Refresh modal dropdowns with updated data
+            if (window.modalManager) {
+                window.modalManager.refreshCreateTaskDropdowns();
+            }
+            
             this.showNotification('Data synced successfully!', 'success');
         } catch (error) {
             console.error('Sync error:', error);

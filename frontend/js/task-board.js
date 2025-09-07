@@ -1035,10 +1035,13 @@ function showCreateTaskModal() {
 
 // Global filter functions
 function toggleMultiselect(filterId) {
-    const container = document.querySelector(`[data-filter-id="${filterId}"]`).parentElement;
+    const container = document.querySelector(`[data-filter-id="${filterId}"]`)?.parentElement;
     const dropdown = document.getElementById(filterId + 'Dropdown');
     
-    if (!container || !dropdown) return; // Skip if elements not found
+    if (!container || !dropdown) {
+        console.log('toggleMultiselect: container or dropdown not found', { filterId, container: !!container, dropdown: !!dropdown });
+        return;
+    }
     
     // Close all other dropdowns
     document.querySelectorAll('.multiselect-container').forEach(cont => {
@@ -1048,7 +1051,10 @@ function toggleMultiselect(filterId) {
     });
     
     // Toggle current dropdown
+    const wasOpen = container.classList.contains('open');
     container.classList.toggle('open');
+    
+    console.log('toggleMultiselect:', { filterId, wasOpen, nowOpen: container.classList.contains('open') });
     
     // Close dropdown when clicking outside
     if (container.classList.contains('open')) {
@@ -1064,7 +1070,10 @@ function toggleMultiselect(filterId) {
 }
 
 function applyFilters() {
-    if (!window.taskBoardManager) return;
+    if (!window.taskBoardManager) {
+        console.log('applyFilters: taskBoardManager not available');
+        return;
+    }
     
     const filters = {
         sprint: getSelectedValues('sprintFilter'),
@@ -1072,6 +1081,8 @@ function applyFilters() {
         assignedBy: getSelectedValues('assignedByFilter'),
         priority: getSelectedValues('priorityFilter')
     };
+    
+    console.log('applyFilters: filters to apply', filters);
     
     // Update active filters
     Object.keys(filters).forEach(filterType => {

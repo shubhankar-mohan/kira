@@ -64,6 +64,12 @@ class App {
             console.log('Populating filters...');
             window.taskManager.populateFilters();
             
+            // Initialize modal manager dropdowns after data is loaded
+            console.log('Initializing modal manager dropdowns...');
+            if (window.modalManager) {
+                window.modalManager.refreshCreateTaskDropdowns();
+            }
+            
             // Initialize filter display text
             if (typeof updateFilterDisplayText === 'function') {
                 updateFilterDisplayText();
@@ -105,7 +111,16 @@ class App {
     loadPageContent(page) {
         switch (page) {
             case 'dashboard':
-                window.taskManager.updateDashboard();
+                // Ensure data is loaded before updating dashboard
+                if (!window.taskManager.tasks || window.taskManager.tasks.length === 0 || 
+                    !window.taskManager.users || window.taskManager.users.length === 0 || 
+                    !window.taskManager.sprints || window.taskManager.sprints.length === 0) {
+                    console.log('Dashboard: Data not available, loading...');
+                    this.loadInitialData();
+                } else {
+                    console.log('Dashboard: Data available, updating...');
+                    window.taskManager.updateDashboard();
+                }
                 break;
             case 'board':
                 if (window.taskBoardManager) {
