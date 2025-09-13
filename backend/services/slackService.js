@@ -138,6 +138,7 @@ class SlackService {
             const userId = event.user;
             const channel = event.channel;
             const ts = event.ts;
+            const threadTs = event.thread_ts || ts;
 
             // Enhanced duplicate prevention - check both thread_ts and message content
             const messageKey = `${ts}-${text}`;
@@ -146,7 +147,47 @@ class SlackService {
                 return;
             }
 
-            // Extract task creation info from mention
+            // If inside a thread and user asks to create a task, build from the thread
+            if (event.thread_ts && /\bcreate(\s+task)?\b/.test(text)) {
+                // Duplicate guard: if already mapped, skip
+                if (this.threadToTaskMap.has(event.thread_ts)) {
+                    await client.chat.postMessage({
+                        channel,
+                        thread_ts: event.thread_ts,
+                        text: 'ℹ️ A task is already linked to this thread.'
+                    });
+                    return;
+                }
+                // Fallback: check Sheets for existing mapping
+                try {
+                    const tasks = await googleSheetsService.getTasks();
+                    const existing = tasks.find(t => String(t.slackThreadId) === String(event.thread_ts));
+                    if (existing) {
+                        this.threadToTaskMap.set(event.thread_ts, existing.id);
+                        this.threadTimestamps.set(event.thread_ts, Date.now());
+                        await client.chat.postMessage({
+                            channel,
+                            thread_ts: event.thread_ts,
+                            text: `ℹ️ Task already exists for this thread (ID: ${existing.id}).`
+                        });
+                        return;
+                    }
+                } catch (e) {}
+                const task = await this.createTaskFromThread(channel, event.thread_ts, userId);
+                if (task) {
+                    const now = Date.now();
+                    this.threadToTaskMap.set(event.thread_ts, task.id);
+                    this.threadTimestamps.set(event.thread_ts, now);
+                    await client.chat.postMessage({
+                        channel,
+                        thread_ts: event.thread_ts,
+                        blocks: this.buildTaskCreatedBlocks(task)
+                    });
+                }
+                return;
+            }
+
+            // Extract task creation info from mention text (non-thread or generic)
             const taskInfo = this.parseTaskFromMention(event.text);
             
             if (taskInfo) {
@@ -156,15 +197,15 @@ class SlackService {
                 
                 // Map thread to task for future comments (prevent duplicates)
                 const now = Date.now();
-                this.threadToTaskMap.set(ts, task.id);
+                this.threadToTaskMap.set(threadTs, task.id);
                 this.threadToTaskMap.set(messageKey, task.id);
-                this.threadTimestamps.set(ts, now);
+                this.threadTimestamps.set(threadTs, now);
                 this.threadTimestamps.set(messageKey, now);
                 
                 // Send confirmation message with task URL
                 await client.chat.postMessage({
                     channel: channel,
-                    thread_ts: ts,
+                    thread_ts: threadTs,
                     blocks: this.buildTaskCreatedBlocks(task)
                 });
 
@@ -268,7 +309,7 @@ class SlackService {
         const taskData = {
             task: taskInfo.title,
             description: taskInfo.description,
-            status: 'TODO',
+            status: 'Not started',
             priority: taskInfo.priority,
             type: taskInfo.type,
             assignedTo: assignedEmails.join(', '),
@@ -289,8 +330,75 @@ class SlackService {
             user: createdBy ? createdBy.name : 'Slack User',
             comment: `Task created from Slack mention in thread ${threadTs}`
         });
+        // Log activity
+        try {
+            await googleSheetsService.addActivity({
+                taskId: task.id,
+                user: createdBy ? createdBy.name : 'Slack User',
+                action: 'created',
+                details: `Created from Slack` ,
+                source: 'slack'
+            });
+        } catch (e) { console.error('Failed to log activity (slack create):', e.message); }
 
         return task;
+    }
+
+    // Build a task from an existing thread: first message as title, rest as seeded comments
+    async createTaskFromThread(channelId, threadTs, requesterSlackUserId) {
+        try {
+            const replies = await this.client.conversations.replies({ channel: channelId, ts: threadTs, inclusive: true, limit: 100 });
+            const messages = replies.messages || [];
+            if (messages.length === 0) return null;
+
+            const first = messages[0];
+            const title = (first.text || 'New Task').slice(0, 200);
+            const requester = await this.getUserBySlackId(requesterSlackUserId);
+
+            // Create the task
+            const taskInfo = {
+                title,
+                priority: 'P2',
+                type: 'Feature',
+                assignedUsers: [],
+                dueDate: '',
+                sprintPoints: 0,
+                description: title
+            };
+            const task = await this.createTaskFromSlack(taskInfo, requester, threadTs, channelId);
+
+            // Seed remaining messages as comments
+            for (let i = 1; i < messages.length; i++) {
+                const m = messages[i];
+                if (!m || !m.ts || !m.text) continue;
+                // Skip bot messages
+                if (m.bot_id || m.subtype === 'bot_message') continue;
+                const user = await this.getUserBySlackId(m.user);
+                // Only add as comment if it's not the creator message
+                await googleSheetsService.addComment({
+                    taskId: task.id,
+                    user: user ? user.name : 'Slack User',
+                    comment: m.text,
+                    source: 'slack',
+                    slackMessageTs: m.ts,
+                    slackChannelId: channelId
+                });
+                try {
+                    await googleSheetsService.addActivity({
+                        taskId: task.id,
+                        user: user ? user.name : 'Slack User',
+                        action: 'commented',
+                        details: m.text,
+                        source: 'slack'
+                    });
+                } catch (e) {}
+            }
+
+            return task;
+        } catch (error) {
+            console.error('Error creating task from thread:', error);
+            return null;
+        }
     }
 
     async handleThreadMessage(event, client) {
@@ -429,7 +537,12 @@ class SlackService {
                 break;
             case 'help':
             default:
-                await this.sendSlashCommandHelp(respond);
+                // If user typed bare text, treat it as create title
+                if (command.text && action !== 'help') {
+                    await this.handleCreateCommand([command.text], respond, command.user_id);
+                } else {
+                    await this.sendSlashCommandHelp(respond);
+                }
                 break;
         }
     }
@@ -447,7 +560,7 @@ class SlackService {
             const user = await this.getUserBySlackId(userId);
             const task = await googleSheetsService.createTask({
                 task: title,
-                status: 'TODO',
+                status: 'Not started',
                 priority: 'P2',
                 type: 'Feature',
                 createdBy: user ? user.name : 'Slack User'

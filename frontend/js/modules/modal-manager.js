@@ -799,40 +799,35 @@ class ModalManager {
         }
     }
 
-    loadTaskActivity(taskId) {
+    async loadTaskActivity(taskId) {
         const activityFeed = document.getElementById('taskActivityFeed');
         if (!activityFeed) return;
-
-        // Mock activity data - in real app, this would come from API
-        const activities = [
-            {
-                user: 'Shubhankar',
-                action: 'Changed status from Not Started to In Progress',
-                time: '2 hours ago',
-                avatar: 'S'
-            },
-            {
-                user: 'Omkar Salapurkar',
-                action: 'Updated task description and added acceptance criteria',
-                time: '1 day ago',
-                avatar: 'O',
-                changes: 'Added detailed acceptance criteria including BigQuery setup, data transformation, and monitoring requirements.'
-            }
-        ];
-
-        activityFeed.innerHTML = activities.map(activity => `
-            <div class="task-activity-item">
-                <div class="task-activity-avatar">${activity.avatar}</div>
-                <div class="task-activity-content">
-                    <div class="task-activity-header">
-                        <span class="task-activity-user">${activity.user}</span>
-                        <span class="task-activity-time">${activity.time}</span>
+        try {
+            const res = await api.getTask(taskId);
+            const task = res.data || {};
+            const activities = Array.isArray(task.activities) ? task.activities : [];
+            const render = (a) => {
+                const avatar = (a.user || 'U').charAt(0).toUpperCase();
+                const timeText = a.timestamp || '';
+                const details = a.details ? `<div class="task-activity-changes">${a.details}</div>` : '';
+                return `
+                    <div class="task-activity-item">
+                        <div class="task-activity-avatar">${avatar}</div>
+                        <div class="task-activity-content">
+                            <div class="task-activity-header">
+                                <span class="task-activity-user">${a.user || 'User'}</span>
+                                <span class="task-activity-time">${timeText}</span>
+                            </div>
+                            <div class="task-activity-action">${a.action}</div>
+                            ${details}
+                        </div>
                     </div>
-                    <div class="task-activity-action">${activity.action}</div>
-                    ${activity.changes ? `<div class="task-activity-changes">${activity.changes}</div>` : ''}
-                </div>
-            </div>
-        `).join('');
+                `;
+            };
+            activityFeed.innerHTML = activities.map(render).join('');
+        } catch (err) {
+            console.error('Failed to load activity:', err);
+        }
     }
 
     async loadTaskComments(taskId) {
