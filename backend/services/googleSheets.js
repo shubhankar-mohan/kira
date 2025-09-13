@@ -35,12 +35,14 @@ class GoogleSheetsService {
                 tasks: this.doc.sheetsByTitle['Tasks'] || await this.createTasksSheet(),
                 users: this.doc.sheetsByTitle['Users'] || await this.createUsersSheet(),
                 sprints: this.doc.sheetsByTitle['Sprints'] || await this.createSprintsSheet(),
-                comments: this.doc.sheetsByTitle['Comments'] || await this.createCommentsSheet()
+                comments: this.doc.sheetsByTitle['Comments'] || await this.createCommentsSheet(),
+                activities: this.doc.sheetsByTitle['Activities'] || await this.createActivitiesSheet()
             };
 
             // Ensure Slack-related columns exist
             await this.ensureTaskSlackColumns();
             await this.ensureCommentSlackColumns();
+            await this.ensureActivityColumns();
 
             this.isInitialized = true;
             console.log('✅ Google Sheets service initialized successfully');
@@ -94,6 +96,21 @@ class GoogleSheetsService {
         }
     }
 
+    // Ensure activity sheet has required columns
+    async ensureActivityColumns() {
+        const sheet = this.sheets.activities;
+        await sheet.loadHeaderRow();
+        const headers = sheet.headerValues || [];
+        const required = ['ID', 'Task ID', 'User', 'Action', 'Details', 'Source', 'Timestamp'];
+        const missing = required.filter(h => !headers.includes(h));
+        if (missing.length > 0) {
+            const newHeaders = [...headers, ...missing];
+            await sheet.setHeaderRow(newHeaders);
+            await sheet.loadHeaderRow();
+            console.log(`🧩 Ensured activity columns: ${missing.join(', ')}`);
+        }
+    }
+
     async createTasksSheet() {
         console.log('📝 Creating Tasks sheet...');
         const sheet = await this.doc.addSheet({ 
@@ -132,6 +149,15 @@ class GoogleSheetsService {
         const sheet = await this.doc.addSheet({ 
             title: 'Comments',
             headerValues: ['ID', 'Task ID', 'User', 'Comment', 'Timestamp']
+        });
+        return sheet;
+    }
+
+    async createActivitiesSheet() {
+        console.log('📜 Creating Activities sheet...');
+        const sheet = await this.doc.addSheet({
+            title: 'Activities',
+            headerValues: ['ID', 'Task ID', 'User', 'Action', 'Details', 'Source', 'Timestamp']
         });
         return sheet;
     }
@@ -435,6 +461,39 @@ class GoogleSheetsService {
         });
         
         return { ...commentData, id: commentId };
+    }
+
+    // Activities operations
+    async getActivities(taskId) {
+        await this.initialize();
+        const rows = await this.sheets.activities.getRows();
+        return rows
+            .filter(row => row.get('Task ID') === taskId.toString())
+            .map(row => ({
+                id: row.get('ID'),
+                taskId: row.get('Task ID'),
+                user: row.get('User'),
+                action: row.get('Action'),
+                details: row.get('Details') || '',
+                source: row.get('Source') || '',
+                timestamp: row.get('Timestamp')
+            }));
+    }
+
+    async addActivity(activity) {
+        await this.initialize();
+        await this.ensureActivityColumns();
+        const id = Date.now().toString();
+        await this.sheets.activities.addRow({
+            'ID': id,
+            'Task ID': activity.taskId,
+            'User': activity.user || 'System',
+            'Action': activity.action,
+            'Details': activity.details || '',
+            'Source': activity.source || 'web',
+            'Timestamp': new Date().toLocaleString()
+        });
+        return { ...activity, id };
     }
 
     // Helper method to map internal field names to sheet columns

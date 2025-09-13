@@ -62,10 +62,17 @@ router.get('/:id', async (req, res) => {
             const tb = new Date(b.timestamp).getTime() || 0;
             return tb - ta;
         });
+
+        // Get activities for this task (sorted: newest first)
+        const activities = (await googleSheets.getActivities(req.params.id)).sort((a, b) => {
+            const ta = new Date(a.timestamp).getTime() || 0;
+            const tb = new Date(b.timestamp).getTime() || 0;
+            return tb - ta;
+        });
         
         res.json({
             success: true,
-            data: { ...task, comments }
+            data: { ...task, comments, activities }
         });
     } catch (error) {
         console.error('Error fetching task:', error);
@@ -94,6 +101,16 @@ router.post('/', async (req, res) => {
         }
 
         const newTask = await googleSheets.createTask(taskData);
+        // Record activity
+        try {
+            await googleSheets.addActivity({
+                taskId: newTask.id,
+                user: taskData.createdBy || 'API User',
+                action: 'created',
+                details: `Task created: ${newTask.task}`,
+                source: 'web'
+            });
+        } catch (e) { console.error('Failed to log activity (create):', e.message); }
 
         // Post a Slack thread for this dashboard-created task if not already linked
         try {
@@ -133,6 +150,17 @@ router.put('/:id', async (req, res) => {
         };
         
         const updatedTask = await googleSheets.updateTask(req.params.id, updates);
+        // Record activity for updates
+        try {
+            const fields = Object.keys(updates).filter(k => !['lastEditedBy'].includes(k));
+            await googleSheets.addActivity({
+                taskId: req.params.id,
+                user: updates.lastEditedBy,
+                action: 'updated',
+                details: fields.length > 0 ? `Fields: ${fields.join(', ')}` : 'Task updated',
+                source: 'web'
+            });
+        } catch (e) { console.error('Failed to log activity (update):', e.message); }
         
         res.json({
             success: true,
@@ -214,6 +242,16 @@ router.post('/:id/comments', async (req, res) => {
             slackMessageTs,
             slackChannelId
         });
+        // Record activity for comment
+        try {
+            await googleSheets.addActivity({
+                taskId: req.params.id,
+                user: newComment.user,
+                action: 'commented',
+                details: newComment.comment,
+                source: 'web'
+            });
+        } catch (e) { console.error('Failed to log activity (comment):', e.message); }
         
         res.status(201).json({
             success: true,

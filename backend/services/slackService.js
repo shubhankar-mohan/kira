@@ -331,6 +331,16 @@ class SlackService {
                 slackMessageTs: event.ts,
                 slackChannelId: event.channel
             });
+            // Log activity from Slack
+            try {
+                await googleSheetsService.addActivity({
+                    taskId: resolvedTaskId,
+                    user: userName,
+                    action: 'commented',
+                    details: event.text,
+                    source: 'slack'
+                });
+            } catch (e) { console.error('Failed to log activity (slack comment):', e.message); }
 
             // React to confirm comment was recorded
             await client.reactions.add({
