@@ -5,19 +5,80 @@ class ScrumMasterFeatures {
         this.client = slackClient;
         this.burndownData = new Map(); // Cache for burndown calculations
         this.teamMetrics = new Map(); // Cache for team performance metrics
+        this.cache = new Map(); // General purpose cache
+        this.cacheTimeout = 5 * 60 * 1000; // 5 minutes cache timeout
+    }
+
+    // Cache utility methods
+    getCachedData(key) {
+        const cached = this.cache.get(key);
+        if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+            return cached.data;
+        }
+        return null;
+    }
+
+    setCachedData(key, data) {
+        this.cache.set(key, {
+            data,
+            timestamp: Date.now()
+        });
+    }
+
+    clearCache(keyPattern = null) {
+        if (keyPattern) {
+            // Clear specific pattern
+            for (const key of this.cache.keys()) {
+                if (key.includes(keyPattern)) {
+                    this.cache.delete(key);
+                }
+            }
+        } else {
+            // Clear all cache
+            this.cache.clear();
+        }
     }
 
     // Advanced burndown chart analysis with predictive alerts
     async generateBurndownAnalysis(sprintName) {
         try {
+            // Check cache first
+            const cacheKey = `burndown-${sprintName}`;
+            const cached = this.getCachedData(cacheKey);
+            if (cached) {
+                return cached;
+            }
+
             const tasks = await googleSheetsService.getTasks();
             const sprints = await googleSheetsService.getSprints();
             
-            const sprint = sprints.find(s => s.name === sprintName && s.status === 'Active');
-            if (!sprint) return null;
+            if (!sprintName) {
+                // If no sprint specified, use active sprint
+                const activeSprint = sprints.find(s => s.status === 'Active');
+                if (!activeSprint) {
+                    throw new Error('No active sprint found and no sprint specified');
+                }
+                sprintName = activeSprint.name;
+            }
+            
+            // Allow analysis of any sprint (active, completed, or planned)
+            const sprint = sprints.find(s => s.name === sprintName);
+            if (!sprint) {
+                throw new Error(`Sprint '${sprintName}' not found`);
+            }
 
             const sprintTasks = tasks.filter(t => t.sprintWeek === sprintName);
+            if (sprintTasks.length === 0) {
+                console.warn(`No tasks found for sprint: ${sprintName}`);
+            }
+            
             const analysis = this.calculateBurndownMetrics(sprintTasks, sprint);
+            analysis.sprintName = sprintName;
+            analysis.sprintStatus = sprint.status;
+            analysis.totalTasks = sprintTasks.length;
+            
+            // Cache the result
+            this.setCachedData(cacheKey, analysis);
             
             return analysis;
         } catch (error) {
@@ -27,32 +88,66 @@ class ScrumMasterFeatures {
     }
 
     calculateBurndownMetrics(tasks, sprint) {
-        const totalPoints = tasks.reduce((sum, task) => sum + (task.sprintPoints || 0), 0);
+        // Input validation
+        if (!tasks || !Array.isArray(tasks)) {
+            throw new Error('Invalid tasks array provided');
+        }
+        if (!sprint || !sprint.startDate || !sprint.endDate) {
+            throw new Error('Invalid sprint data provided');
+        }
+
+        const totalPoints = tasks.reduce((sum, task) => sum + Math.max(0, task.sprintPoints || 0), 0);
         const completedPoints = tasks
             .filter(t => t.status === 'DONE')
-            .reduce((sum, task) => sum + (task.sprintPoints || 0), 0);
+            .reduce((sum, task) => sum + Math.max(0, task.sprintPoints || 0), 0);
         
         const startDate = new Date(sprint.startDate);
         const endDate = new Date(sprint.endDate);
         const now = new Date();
         
+        // Validate dates
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            throw new Error('Invalid sprint dates');
+        }
+        if (endDate <= startDate) {
+            throw new Error('Sprint end date must be after start date');
+        }
+        
         const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-        const elapsedDays = Math.ceil((now - startDate) / (1000 * 60 * 60 * 24));
+        const elapsedDays = Math.max(0, Math.ceil((now - startDate) / (1000 * 60 * 60 * 24)));
         const remainingDays = Math.max(0, totalDays - elapsedDays);
         
-        const idealProgressRate = totalPoints / totalDays;
+        // Safe mathematical operations with division by zero checks
+        const idealProgressRate = totalDays > 0 ? totalPoints / totalDays : 0;
         const actualProgressRate = elapsedDays > 0 ? completedPoints / elapsedDays : 0;
         const expectedPointsCompleted = idealProgressRate * elapsedDays;
         
-        // Predictive analysis
-        const projectedCompletion = actualProgressRate > 0 ? totalPoints / actualProgressRate : Infinity;
-        const isOnTrack = projectedCompletion <= totalDays;
-        const velocityTrend = actualProgressRate / idealProgressRate;
+        // Predictive analysis with safety checks
+        let projectedCompletion = Infinity;
+        let isOnTrack = false;
+        let velocityTrend = 0;
         
+        if (actualProgressRate > 0 && totalPoints > 0) {
+            projectedCompletion = Math.ceil(totalPoints / actualProgressRate);
+            isOnTrack = projectedCompletion <= totalDays;
+        } else if (totalPoints === 0) {
+            // No work to do
+            projectedCompletion = 0;
+            isOnTrack = true;
+        }
+        
+        if (idealProgressRate > 0) {
+            velocityTrend = actualProgressRate / idealProgressRate;
+        }
+        
+        // Safe percentage calculations
+        const completionPercentage = totalPoints > 0 ? Math.round((completedPoints / totalPoints) * 100 * 100) / 100 : 0;
+        const timeElapsedPercentage = totalDays > 0 ? Math.round((elapsedDays / totalDays) * 100 * 100) / 100 : 0;
+
         return {
             totalPoints,
             completedPoints,
-            remainingPoints: totalPoints - completedPoints,
+            remainingPoints: Math.max(0, totalPoints - completedPoints),
             totalDays,
             elapsedDays,
             remainingDays,
@@ -63,8 +158,8 @@ class ScrumMasterFeatures {
             projectedCompletion,
             isOnTrack,
             velocityTrend,
-            completionPercentage: (completedPoints / totalPoints) * 100,
-            timeElapsedPercentage: (elapsedDays / totalDays) * 100
+            completionPercentage,
+            timeElapsedPercentage
         };
     }
 
@@ -270,15 +365,56 @@ class ScrumMasterFeatures {
     }
 
     async getAllComments(tasks) {
-        const allComments = [];
-        for (const task of tasks) {
-            try {
-                const taskComments = await googleSheetsService.getComments(task.id);
-                allComments.push(...taskComments);
-            } catch (error) {
-                console.error(`Error getting comments for task ${task.id}:`, error);
-            }
+        if (!tasks || !Array.isArray(tasks)) {
+            return [];
         }
+
+        const allComments = [];
+        const maxConcurrency = 5; // Limit concurrent API calls
+        const chunks = [];
+        
+        // Split tasks into chunks for better performance
+        for (let i = 0; i < tasks.length; i += maxConcurrency) {
+            chunks.push(tasks.slice(i, i + maxConcurrency));
+        }
+        
+        try {
+            // Process chunks sequentially, tasks within chunk concurrently
+            for (const chunk of chunks) {
+                const promises = chunk.map(async (task) => {
+                    if (!task || !task.id) {
+                        console.warn('Invalid task object:', task);
+                        return [];
+                    }
+                    
+                    try {
+                        const taskComments = await googleSheetsService.getComments(task.id);
+                        return Array.isArray(taskComments) ? taskComments : [];
+                    } catch (error) {
+                        console.error(`Error getting comments for task ${task.id}:`, error);
+                        return []; // Return empty array on error, don't fail entire operation
+                    }
+                });
+                
+                const chunkResults = await Promise.allSettled(promises);
+                
+                chunkResults.forEach((result, index) => {
+                    if (result.status === 'fulfilled') {
+                        allComments.push(...result.value);
+                    } else {
+                        console.error(`Failed to get comments for task ${chunk[index]?.id}:`, result.reason);
+                    }
+                });
+                
+                // Small delay between chunks to avoid API rate limits
+                if (chunks.indexOf(chunk) < chunks.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+        } catch (error) {
+            console.error('Error in getAllComments batch processing:', error);
+        }
+        
         return allComments;
     }
 

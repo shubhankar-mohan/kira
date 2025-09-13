@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const googleSheets = require('../services/googleSheets');
+const slackService = require('../services/slackService');
 
 // Get all tasks
 router.get('/', async (req, res) => {
@@ -55,8 +56,12 @@ router.get('/:id', async (req, res) => {
             });
         }
 
-        // Get comments for this task
-        const comments = await googleSheets.getComments(req.params.id);
+        // Get comments for this task (sorted: newest first)
+        const comments = (await googleSheets.getComments(req.params.id)).sort((a, b) => {
+            const ta = new Date(a.timestamp).getTime() || 0;
+            const tb = new Date(b.timestamp).getTime() || 0;
+            return tb - ta;
+        });
         
         res.json({
             success: true,
@@ -89,7 +94,22 @@ router.post('/', async (req, res) => {
         }
 
         const newTask = await googleSheets.createTask(taskData);
-        
+
+        // Post a Slack thread for this dashboard-created task if not already linked
+        try {
+            const { channel, thread_ts } = await slackService.postTaskCreatedThread({ ...newTask, id: newTask.id });
+            // Persist Slack thread & channel onto task
+            await googleSheets.updateTask(newTask.id, {
+                slackThreadId: thread_ts,
+                slackChannelId: channel,
+                lastEditedBy: taskData.createdBy || 'API User'
+            });
+            newTask.slackThreadId = thread_ts;
+            newTask.slackChannelId = channel;
+        } catch (err) {
+            console.error('Failed to start Slack thread for task:', err.message);
+        }
+
         res.status(201).json({
             success: true,
             data: newTask,
@@ -169,7 +189,31 @@ router.post('/:id/comments', async (req, res) => {
             });
         }
 
-        const newComment = await googleSheets.addComment(commentData);
+        const tasks = await googleSheets.getTasks();
+        const task = tasks.find(t => t.id === req.params.id);
+
+        let slackMessageTs = '';
+        let slackChannelId = '';
+
+        // If the task is linked to a Slack thread, post to Slack first to capture ts
+        if (task && task.slackThreadId && task.slackChannelId) {
+            try {
+                slackChannelId = task.slackChannelId;
+                // Bold author and separate message clearly
+                const slackText = `*${commentData.user}*\n${commentData.comment}`;
+                slackMessageTs = await slackService.postCommentToThread(task.slackChannelId, task.slackThreadId, slackText);
+            } catch (err) {
+                console.error('Failed to mirror comment to Slack:', err.message);
+            }
+        }
+
+        // Add a single comment row in Sheets with Slack metadata if available
+        const newComment = await googleSheets.addComment({
+            ...commentData,
+            source: 'web',
+            slackMessageTs,
+            slackChannelId
+        });
         
         res.status(201).json({
             success: true,

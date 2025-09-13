@@ -11,12 +11,11 @@ class SlackService {
         this.client = null;
         this.isInitialized = false;
         this.threadToTaskMap = new Map(); // Maps Slack thread_ts to task IDs
+        this.threadTimestamps = new Map(); // Track creation timestamps for cleanup
         this.userEmailMap = new Map(); // Maps Slack user IDs to email addresses
         this.scheduledJobs = [];
         this.scrumMaster = null; // Will be initialized after client is ready
-        
-        // Cleanup old thread mappings every hour to prevent memory leaks
-        setInterval(() => this.cleanupOldThreads(), 60 * 60 * 1000);
+        this.cleanupInterval = null;
         
         this.initialize();
     }
@@ -48,6 +47,9 @@ class SlackService {
             // Setup scheduled jobs
             this.setupScheduledJobs();
 
+            // Setup memory cleanup - run every hour
+            this.cleanupInterval = setInterval(() => this.cleanupOldThreads(), 60 * 60 * 1000);
+
             this.isInitialized = true;
             console.log('✅ Slack service initialized successfully');
             
@@ -64,7 +66,7 @@ class SlackService {
 
         // Listen for messages in threads (for comments)
         this.app.event('message', async ({ event, client }) => {
-            if (event.thread_ts && this.threadToTaskMap.has(event.thread_ts)) {
+            if (event.thread_ts) {
                 await this.handleThreadMessage(event, client);
             }
         });
@@ -92,6 +94,44 @@ class SlackService {
         });
     }
 
+    async handleReactionAdded(event, client) {
+        try {
+            // Optional: react to ✅ on task thread to mark done
+            if (!event || !event.item || !event.item.ts) return;
+            const threadTs = event.item.ts;
+            const reaction = event.reaction;
+
+            // Only consider when reaction is in a thread we know or can resolve
+            let taskId = this.threadToTaskMap.get(threadTs);
+            if (!taskId) {
+                const tasks = await googleSheetsService.getTasks();
+                const linked = tasks.find(t => String(t.slackThreadId) === String(threadTs));
+                if (linked) {
+                    taskId = linked.id;
+                    this.threadToTaskMap.set(threadTs, taskId);
+                    this.threadTimestamps.set(threadTs, Date.now());
+                }
+            }
+            if (!taskId) return;
+
+            // Example behavior: if ✅ added, mark task done
+            if (reaction === 'white_check_mark' || reaction === 'heavy_check_mark') {
+                const user = await this.getUserBySlackId(event.user);
+                await googleSheetsService.updateTask(taskId, {
+                    status: 'DONE',
+                    lastEditedBy: user ? user.name : 'Slack User'
+                });
+                await client.chat.postMessage({
+                    channel: event.item.channel,
+                    thread_ts: threadTs,
+                    text: `✅ Marked task ${taskId} as DONE`
+                });
+            }
+        } catch (error) {
+            console.error('Error in handleReactionAdded:', error);
+        }
+    }
+
     async handleAppMention(event, client) {
         try {
             const text = event.text.toLowerCase();
@@ -115,8 +155,11 @@ class SlackService {
                 const task = await this.createTaskFromSlack(taskInfo, user, ts, channel);
                 
                 // Map thread to task for future comments (prevent duplicates)
+                const now = Date.now();
                 this.threadToTaskMap.set(ts, task.id);
                 this.threadToTaskMap.set(messageKey, task.id);
+                this.threadTimestamps.set(ts, now);
+                this.threadTimestamps.set(messageKey, now);
                 
                 // Send confirmation message with task URL
                 await client.chat.postMessage({
@@ -146,12 +189,22 @@ class SlackService {
     }
 
     parseTaskFromMention(text) {
+        // Input validation
+        if (!text || typeof text !== 'string') {
+            console.warn('Invalid text input for parseTaskFromMention:', text);
+            return null;
+        }
+
         // Remove the bot mention from the beginning only
         const botMentionPattern = /<@[^>]+>/;
         const firstMentionMatch = text.match(botMentionPattern);
         if (!firstMentionMatch) return null; // No bot mention found
         
-        const cleanText = text.replace(firstMentionMatch[0], '').trim();
+        let cleanText = text.replace(firstMentionMatch[0], '').trim();
+        
+        // Sanitize input to prevent potential issues
+        cleanText = cleanText.replace(/[<>]/g, ''); // Remove angle brackets
+        cleanText = cleanText.substring(0, 500); // Limit length to prevent abuse
         
         // If the cleaned text is empty or too short, return null
         if (!cleanText || cleanText.length < 3) return null;
@@ -242,17 +295,41 @@ class SlackService {
 
     async handleThreadMessage(event, client) {
         try {
-            const taskId = this.threadToTaskMap.get(event.thread_ts);
-            if (!taskId) return;
+            // Ignore bot/self messages to prevent loops
+            if (event.bot_id || event.subtype === 'bot_message') {
+                return;
+            }
+
+            const mappedTaskId = this.threadToTaskMap.get(event.thread_ts);
+            let resolvedTaskId = mappedTaskId;
+
+            // Fallback: lookup task by slackThreadId in Sheets if not in memory
+            if (!resolvedTaskId) {
+                try {
+                    const tasks = await googleSheetsService.getTasks();
+                    const linkedTask = tasks.find(t => String(t.slackThreadId) === String(event.thread_ts));
+                    if (linkedTask) {
+                        resolvedTaskId = linkedTask.id;
+                        this.threadToTaskMap.set(event.thread_ts, linkedTask.id);
+                        this.threadTimestamps.set(event.thread_ts, Date.now());
+                    }
+                } catch (e) {
+                    console.error('Fallback lookup failed:', e);
+                }
+            }
+            if (!resolvedTaskId) return;
 
             const user = await this.getUserBySlackId(event.user);
             const userName = user ? user.name : 'Slack User';
 
-            // Add comment to task
+            // Add comment to task with Slack metadata
             await googleSheetsService.addComment({
-                taskId: taskId,
+                taskId: resolvedTaskId,
                 user: userName,
-                comment: event.text
+                comment: event.text,
+                source: 'slack',
+                slackMessageTs: event.ts,
+                slackChannelId: event.channel
             });
 
             // React to confirm comment was recorded
@@ -264,6 +341,44 @@ class SlackService {
 
         } catch (error) {
             console.error('Error handling thread message:', error);
+        }
+    }
+
+    // Post a task created message and return { channel, thread_ts }
+    async postTaskCreatedThread(task) {
+        try {
+            const channel = process.env.SLACK_TASKS_CHANNEL || process.env.SLACK_NOTIFICATIONS_CHANNEL || '#eng-sprint';
+            const result = await this.client.chat.postMessage({
+                channel: channel,
+                text: `Task created: ${task.task}`,
+                blocks: this.buildTaskCreatedBlocks(task)
+            });
+
+            if (result && result.ts) {
+                this.threadToTaskMap.set(result.ts, task.id);
+                this.threadTimestamps.set(result.ts, Date.now());
+            }
+
+            return { channel: result.channel, thread_ts: result.ts };
+        } catch (error) {
+            console.error('Error posting task created thread:', error);
+            throw error;
+        }
+    }
+
+    // Post a comment to an existing Slack thread, return message ts
+    async postCommentToThread(channelId, threadTs, text) {
+        try {
+            const result = await this.client.chat.postMessage({
+                channel: channelId,
+                thread_ts: threadTs,
+                text,
+                mrkdwn: true
+            });
+            return result.ts;
+        } catch (error) {
+            console.error('Error posting comment to Slack thread:', error);
+            throw error;
         }
     }
 
@@ -1061,20 +1176,92 @@ Create tasks by mentioning @kira: \`@kira Fix login bug @john @jane P1 Feature d
         try {
             const now = Date.now();
             const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+            let cleanedCount = 0;
             
-            // Convert thread timestamp to milliseconds (Slack timestamps are in seconds with decimal)
-            for (const [threadTs, taskId] of this.threadToTaskMap) {
-                // Skip non-timestamp keys (like message keys)
-                if (!threadTs.includes('.')) continue;
-                
-                const threadTime = parseFloat(threadTs) * 1000;
-                if (now - threadTime > maxAge) {
-                    this.threadToTaskMap.delete(threadTs);
-                    console.log(`Cleaned up old thread mapping: ${threadTs}`);
+            // Clean up entries based on their creation timestamp
+            for (const [key, createdAt] of this.threadTimestamps) {
+                if (now - createdAt > maxAge) {
+                    this.threadToTaskMap.delete(key);
+                    this.threadTimestamps.delete(key);
+                    cleanedCount++;
                 }
             }
+            
+            // Additional cleanup: remove orphaned entries without timestamps
+            for (const [key] of this.threadToTaskMap) {
+                if (!this.threadTimestamps.has(key)) {
+                    // For Slack timestamp-based keys, use the timestamp itself
+                    if (key.includes('.') && !isNaN(parseFloat(key))) {
+                        const threadTime = parseFloat(key) * 1000;
+                        if (now - threadTime > maxAge) {
+                            this.threadToTaskMap.delete(key);
+                            cleanedCount++;
+                        }
+                    } else {
+                        // For other keys without known age, keep them but log warning
+                        console.warn(`Found orphaned thread mapping without timestamp: ${key}`);
+                    }
+                }
+            }
+            
+            // Log cleanup results
+            if (cleanedCount > 0) {
+                console.log(`✅ Cleaned up ${cleanedCount} old thread mappings`);
+            }
+            
+            // Memory usage monitoring
+            const threadMapSize = this.threadToTaskMap.size;
+            const timestampMapSize = this.threadTimestamps.size;
+            
+            if (threadMapSize > 10000 || timestampMapSize > 10000) {
+                console.warn(`⚠️ Large memory usage detected - ThreadMap: ${threadMapSize}, TimestampMap: ${timestampMapSize}`);
+            }
+            
         } catch (error) {
             console.error('Error cleaning up thread mappings:', error);
+        }
+    }
+
+    // Graceful shutdown method
+    async shutdown() {
+        try {
+            console.log('🔄 Shutting down Slack service...');
+            
+            // Stop scheduled jobs
+            if (this.scheduledJobs && this.scheduledJobs.length > 0) {
+                this.scheduledJobs.forEach(job => {
+                    try {
+                        job.stop();
+                    } catch (error) {
+                        console.error('Error stopping scheduled job:', error);
+                    }
+                });
+                console.log(`✅ Stopped ${this.scheduledJobs.length} scheduled jobs`);
+            }
+            
+            // Clear cleanup interval
+            if (this.cleanupInterval) {
+                clearInterval(this.cleanupInterval);
+                this.cleanupInterval = null;
+                console.log('✅ Stopped cleanup interval');
+            }
+            
+            // Clear maps to free memory
+            this.threadToTaskMap.clear();
+            this.threadTimestamps.clear();
+            this.userEmailMap.clear();
+            
+            // Clear scrum master cache if available
+            if (this.scrumMaster && this.scrumMaster.clearCache) {
+                this.scrumMaster.clearCache();
+                console.log('✅ Cleared scrum master cache');
+            }
+            
+            this.isInitialized = false;
+            console.log('✅ Slack service shutdown completed');
+            
+        } catch (error) {
+            console.error('Error during Slack service shutdown:', error);
         }
     }
 }

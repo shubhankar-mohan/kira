@@ -6,6 +6,8 @@ class GoogleSheetsService {
         this.doc = null;
         this.isInitialized = false;
         this.sheets = {};
+        // Prefix to force Slack ts to stay as text in Sheets
+        this.SLACK_TS_PREFIX = 'ts:';
     }
 
     async initialize() {
@@ -36,12 +38,59 @@ class GoogleSheetsService {
                 comments: this.doc.sheetsByTitle['Comments'] || await this.createCommentsSheet()
             };
 
+            // Ensure Slack-related columns exist
+            await this.ensureTaskSlackColumns();
+            await this.ensureCommentSlackColumns();
+
             this.isInitialized = true;
             console.log('✅ Google Sheets service initialized successfully');
             
         } catch (error) {
             console.error('❌ Failed to initialize Google Sheets service:', error.message);
             throw new Error('Google Sheets initialization failed: ' + error.message);
+        }
+    }
+
+    // Helpers to safely store Slack timestamps as text
+    encodeSlackTs(ts) {
+        if (!ts) return '';
+        const str = String(ts);
+        return str.startsWith(this.SLACK_TS_PREFIX) ? str : `${this.SLACK_TS_PREFIX}${str}`;
+    }
+
+    decodeSlackTs(cell) {
+        if (!cell) return '';
+        const str = String(cell);
+        return str.startsWith(this.SLACK_TS_PREFIX) ? str.slice(this.SLACK_TS_PREFIX.length) : str;
+    }
+
+    // Ensure Slack columns exist on Tasks sheet
+    async ensureTaskSlackColumns() {
+        const sheet = this.sheets.tasks;
+        await sheet.loadHeaderRow();
+        const headers = sheet.headerValues || [];
+        const required = ['Slack Thread ID', 'Slack Channel ID'];
+        const missing = required.filter(h => !headers.includes(h));
+        if (missing.length > 0) {
+            const newHeaders = [...headers, ...missing];
+            await sheet.setHeaderRow(newHeaders);
+            await sheet.loadHeaderRow();
+            console.log(`🧩 Added task Slack columns: ${missing.join(', ')}`);
+        }
+    }
+
+    // Ensure Slack columns exist on Comments sheet
+    async ensureCommentSlackColumns() {
+        const sheet = this.sheets.comments;
+        await sheet.loadHeaderRow();
+        const headers = sheet.headerValues || [];
+        const required = ['Slack Message TS', 'Slack Channel ID', 'Source'];
+        const missing = required.filter(h => !headers.includes(h));
+        if (missing.length > 0) {
+            const newHeaders = [...headers, ...missing];
+            await sheet.setHeaderRow(newHeaders);
+            await sheet.loadHeaderRow();
+            console.log(`🧩 Added comment Slack columns: ${missing.join(', ')}`);
         }
     }
 
@@ -114,6 +163,8 @@ class GoogleSheetsService {
             sprintSpilloverTask: row.get('Sprint Spillover Task'),
             message: row.get('Message'),
             attachment: row.get('Attachment'),
+            slackThreadId: this.decodeSlackTs(row.get('Slack Thread ID') || ''),
+            slackChannelId: row.get('Slack Channel ID') || '',
             year: parseInt(row.get('Year')) || new Date().getFullYear() % 100,
             _rowNumber: row.rowNumber
         }));
@@ -121,6 +172,7 @@ class GoogleSheetsService {
 
     async createTask(taskData) {
         await this.initialize();
+        await this.ensureTaskSlackColumns();
         
         const taskId = taskData.id || Date.now().toString();
         const timestamp = new Date().toLocaleString();
@@ -147,7 +199,9 @@ class GoogleSheetsService {
             'Sprint Spillover Task': taskData.sprintSpilloverTask || 'No',
             'Message': taskData.message || '',
             'Attachment': taskData.attachment || '',
-            'Year': taskData.year || new Date().getFullYear() % 100
+            'Year': taskData.year || new Date().getFullYear() % 100,
+            'Slack Thread ID': this.encodeSlackTs(taskData.slackThreadId || ''),
+            'Slack Channel ID': taskData.slackChannelId || ''
         });
         
         console.log(`✅ Task created: ${taskData.task}`);
@@ -156,11 +210,17 @@ class GoogleSheetsService {
 
     async updateTask(taskId, updates) {
         await this.initialize();
+        await this.ensureTaskSlackColumns();
         const rows = await this.sheets.tasks.getRows();
         
         const taskRow = rows.find(row => row.get('Task ID') === taskId.toString());
         if (!taskRow) {
             throw new Error(`Task with ID ${taskId} not found`);
+        }
+
+        // Pre-process Slack fields
+        if (updates.slackThreadId) {
+            updates.slackThreadId = this.encodeSlackTs(updates.slackThreadId);
         }
 
         // Update fields
@@ -350,12 +410,16 @@ class GoogleSheetsService {
                 taskId: row.get('Task ID'),
                 user: row.get('User'),
                 comment: row.get('Comment'),
-                timestamp: row.get('Timestamp')
+                timestamp: row.get('Timestamp'),
+                slackMessageTs: this.decodeSlackTs(row.get('Slack Message TS') || ''),
+                slackChannelId: row.get('Slack Channel ID') || '',
+                source: row.get('Source') || ''
             }));
     }
 
     async addComment(commentData) {
         await this.initialize();
+        await this.ensureCommentSlackColumns();
         
         const commentId = Date.now().toString();
         
@@ -364,7 +428,10 @@ class GoogleSheetsService {
             'Task ID': commentData.taskId,
             'User': commentData.user,
             'Comment': commentData.comment,
-            'Timestamp': new Date().toLocaleString()
+            'Timestamp': new Date().toLocaleString(),
+            'Slack Message TS': this.encodeSlackTs(commentData.slackMessageTs || ''),
+            'Slack Channel ID': commentData.slackChannelId || '',
+            'Source': commentData.source || ''
         });
         
         return { ...commentData, id: commentId };
@@ -389,7 +456,9 @@ class GoogleSheetsService {
             'furtherDevelopmentNeeded': 'Further Development Needed',
             'sprintSpilloverTask': 'Sprint Spillover Task',
             'message': 'Message',
-            'attachment': 'Attachment'
+            'attachment': 'Attachment',
+            'slackThreadId': 'Slack Thread ID',
+            'slackChannelId': 'Slack Channel ID'
         };
         return mapping[fieldName];
     }
@@ -404,5 +473,7 @@ class GoogleSheetsService {
         }
     }
 }
+
+// Additional helper methods outside the class prototype would not be exported. Keep within class.
 
 module.exports = new GoogleSheetsService();

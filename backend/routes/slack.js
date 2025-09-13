@@ -25,7 +25,7 @@ const verifySlackRequest = (req, res, next) => {
 // Slack Events API endpoint
 router.post('/events', verifySlackRequest, async (req, res) => {
     const { type, challenge, event } = req.body;
-
+    console.log('Slack Events API endpoint called', req.body);
     // Handle URL verification challenge
     if (type === 'url_verification') {
         return res.json({ challenge });
@@ -58,21 +58,36 @@ router.post('/events', verifySlackRequest, async (req, res) => {
 // Slash command endpoint
 router.post('/commands', verifySlackRequest, async (req, res) => {
     const { command, text, user_id, channel_id, response_url } = req.body;
+    console.log('Slash command endpoint called', req.body);
+    // Validate required fields
+    if (!command || !text || !user_id || !channel_id) {
+        return res.json({
+            text: '❌ Invalid command request. Please try again.',
+            response_type: 'ephemeral'
+        });
+    }
 
     if (command === '/kira') {
         try {
-            const commandData = {
+            const respond = (response) => {
+                // Ensure response has proper structure
+                const validResponse = {
+                    text: response.text || '✅ Command completed',
+                    response_type: response.response_type || 'ephemeral',
+                    ...response
+                };
+                res.json(validResponse);
+            };
+            
+            // Pass the correct command structure expected by SlackService
+            const commandObj = {
                 text,
                 user_id,
                 channel_id,
                 response_url
             };
             
-            const respond = (response) => {
-                res.json(response);
-            };
-            
-            await slackService.handleSlashCommand(commandData, respond, slackService.client);
+            await slackService.handleSlashCommand(commandObj, respond, slackService.client);
         } catch (error) {
             console.error('Slash command error:', error);
             res.json({
@@ -81,16 +96,46 @@ router.post('/commands', verifySlackRequest, async (req, res) => {
             });
         }
     } else {
-        res.status(400).json({ error: 'Unknown command' });
+        res.json({
+            text: `❌ Unknown command: ${command}. Use /kira help for available commands.`,
+            response_type: 'ephemeral'
+        });
     }
 });
 
 // Interactive components endpoint (buttons, modals, etc.)
 router.post('/interactive', verifySlackRequest, async (req, res) => {
-    const payload = JSON.parse(req.body.payload);
-    const { type, actions, user, channel } = payload;
-
+    console.log('Interactive components endpoint called', req.body);
     try {
+        // Safely parse JSON payload
+        if (!req.body || !req.body.payload) {
+            return res.status(400).json({ 
+                error: 'Missing payload in request body',
+                code: 'MISSING_PAYLOAD'
+            });
+        }
+
+        let payload;
+        try {
+            payload = JSON.parse(req.body.payload);
+        } catch (parseError) {
+            console.error('Invalid JSON payload:', parseError);
+            return res.status(400).json({ 
+                error: 'Invalid JSON payload',
+                code: 'INVALID_JSON'
+            });
+        }
+
+        const { type, actions, user, channel } = payload;
+
+        // Validate required payload fields
+        if (!type || !user || !channel) {
+            return res.status(400).json({
+                error: 'Missing required payload fields',
+                code: 'INVALID_PAYLOAD'
+            });
+        }
+
         if (type === 'button_action' && actions && actions[0]) {
             const action = actions[0];
             
@@ -101,13 +146,19 @@ router.post('/interactive', verifySlackRequest, async (req, res) => {
                 case 'task_assign':
                     await handleTaskAssign(action.value, user, channel);
                     break;
+                default:
+                    console.warn('Unknown action ID:', action.action_id);
             }
         }
+
+        res.json({ ok: true });
     } catch (error) {
         console.error('Error handling interactive component:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            code: 'INTERNAL_ERROR'
+        });
     }
-
-    res.json({ ok: true });
 });
 
 // Handle task completion from button

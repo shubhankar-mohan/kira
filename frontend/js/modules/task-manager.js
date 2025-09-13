@@ -149,7 +149,7 @@ class TaskManager {
         }
     }
 
-    async createTask(taskData) {
+    async createTaskApi(taskData) {
         try {
             const response = await api.createTask(taskData);
             if (response.success) {
@@ -481,6 +481,20 @@ class TaskManager {
     showCreateTaskModal() {
         if (window.modalManager) {
             window.modalManager.showModal('createTaskModal');
+            // Hydrate fields with safe defaults to avoid empty modal feel
+            const title = document.getElementById('taskTitle');
+            const priority = document.getElementById('taskPriority');
+            const type = document.getElementById('taskType');
+            const sprint = document.getElementById('taskSprint');
+            if (title && !title.value) title.value = '';
+            if (priority && !priority.value) priority.value = 'P2';
+            if (type && !type.value) type.value = 'Feature';
+            if (sprint && sprint.options.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'No Sprint';
+                sprint.appendChild(opt);
+            }
         }
     }
 
@@ -501,7 +515,7 @@ class TaskManager {
             status: 'Not started' // Ensure default status is "Not started"
         };
 
-        await this.createTask(formData);
+        await this.createTaskApi(formData);
     }
 
     async createSprint() {

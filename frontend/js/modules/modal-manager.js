@@ -407,6 +407,32 @@ class ModalManager {
             if (modalId === 'createTaskModal') {
                 // Re-populate dropdowns with latest data
                 this.refreshCreateTaskDropdowns();
+                // Ensure body exists/visible
+                const body = modal.querySelector('.task-modal-body');
+                if (body) body.style.display = '';
+            }
+            
+            // Ensure edit modal has a visible Save button
+            if (modalId === 'taskDetailsModal') {
+                const footer = modal.querySelector('.task-modal-footer');
+                if (footer) footer.style.display = '';
+                let saveBtn = footer ? footer.querySelector('.task-btn-primary') : null;
+                if (!saveBtn && footer) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'task-btn task-btn-primary';
+                    btn.innerHTML = `
+                        <svg class="task-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17,21 17,13 7,13 7,21"></polyline>
+                            <polyline points="7,3 7,8 15,8"></polyline>
+                        </svg>
+                        Save Changes`;
+                    btn.addEventListener('click', () => {
+                        if (window.modalManager) window.modalManager.saveTaskDetails();
+                    });
+                    footer.appendChild(btn);
+                }
             }
             
             // Focus first input in modal
@@ -809,43 +835,38 @@ class ModalManager {
         `).join('');
     }
 
-    loadTaskComments(taskId) {
+    async loadTaskComments(taskId) {
         const commentsFeed = document.getElementById('taskCommentsFeed');
         if (!commentsFeed) return;
-
-        // Mock comments data - in real app, this would come from API
-        const comments = [
-            {
-                user: 'Omkar Salapurkar',
-                comment: 'Good progress on this! Make sure to test the data transformation logic thoroughly before pushing to production.',
-                time: '4 hours ago',
-                avatar: 'O'
-            },
-            {
-                user: 'Shubhankar',
-                comment: 'Started working on the BigQuery connection setup. Should have the basic pipeline ready by end of day.',
-                time: '1 day ago',
-                avatar: 'S'
-            }
-        ];
-
-        commentsFeed.innerHTML = comments.map(comment => `
-            <div class="task-activity-item">
-                <div class="task-activity-avatar">${comment.avatar}</div>
-                <div class="task-activity-content">
-                    <div class="task-activity-header">
-                        <span class="task-activity-user">${comment.user}</span>
-                        <span class="task-activity-time">${comment.time}</span>
+        try {
+            const res = await api.getTask(taskId);
+            const task = res.data || {};
+            const comments = Array.isArray(task.comments) ? task.comments : [];
+            const render = (c) => {
+                const avatar = (c.user || 'U').charAt(0).toUpperCase();
+                const sourceBadge = c.source === 'slack' ? '<span class="comment-source slack">Slack</span>' : '<span class="comment-source web">Dashboard</span>';
+                const timeText = c.timestamp || '';
+                return `
+                    <div class="task-activity-item">
+                        <div class="task-activity-avatar">${avatar}</div>
+                        <div class="task-activity-content">
+                            <div class="task-activity-header">
+                                <span class="task-activity-user">${c.user || 'User'}</span>
+                                ${sourceBadge}
+                                <span class="task-activity-time">${timeText}</span>
+                            </div>
+                            <div class="task-activity-action">${(c.comment || '').replace(/\n/g, '<br>')}</div>
+                        </div>
                     </div>
-                    <div class="task-activity-action">${comment.comment}</div>
-                </div>
-            </div>
-        `).join('');
-
-        // Update comment count
-        const commentCount = document.querySelector('.task-tab-button:last-child span');
-        if (commentCount) {
-            commentCount.textContent = comments.length;
+                `;
+            };
+            commentsFeed.innerHTML = comments.map(render).join('');
+            const commentCount = document.querySelector('.task-tab-button:last-child span');
+            if (commentCount) {
+                commentCount.textContent = comments.length;
+            }
+        } catch (err) {
+            console.error('Failed to load comments:', err);
         }
     }
 
@@ -907,7 +928,7 @@ class ModalManager {
     }
 
     // Comment functionality
-    addComment() {
+    async addComment() {
         const textarea = document.getElementById('taskCommentTextarea');
         const comment = textarea.value.trim();
         
@@ -916,39 +937,32 @@ class ModalManager {
             return;
         }
 
-        // Add comment to feed
-        const commentsFeed = document.getElementById('taskCommentsFeed');
-        const currentUser = window.authManager.currentUser;
-        const avatar = currentUser ? currentUser.name.charAt(0).toUpperCase() : 'U';
-        const userName = currentUser ? currentUser.name : 'User';
+        try {
+            // Determine task ID
+            const taskId = window.taskManager.currentTaskId || window.router.currentTaskId;
+            if (!taskId) {
+                window.taskManager.showNotification('No task selected', 'error');
+                return;
+            }
 
-        const commentHtml = `
-            <div class="task-activity-item">
-                <div class="task-activity-avatar">${avatar}</div>
-                <div class="task-activity-content">
-                    <div class="task-activity-header">
-                        <span class="task-activity-user">${userName}</span>
-                        <span class="task-activity-time">Just now</span>
-                    </div>
-                    <div class="task-activity-action">${comment}</div>
-                </div>
-            </div>
-        `;
+            // Post to backend
+            const userName = window.authManager?.currentUser?.name || 'Anonymous';
+            const response = await api.addComment(taskId, comment, userName);
 
-        commentsFeed.insertAdjacentHTML('afterbegin', commentHtml);
-        
-        // Clear textarea
-        textarea.value = '';
-        textarea.style.height = 'auto';
-        
-        // Update comment count
-        const commentCount = document.querySelector('.task-tab-button:last-child span');
-        if (commentCount) {
-            const currentCount = parseInt(commentCount.textContent) || 0;
-            commentCount.textContent = currentCount + 1;
+            if (response && response.success) {
+                // Refresh comments from API to avoid duplicate rendering
+                await this.loadTaskComments(taskId);
+                // Reset input
+                textarea.value = '';
+                textarea.style.height = 'auto';
+                window.taskManager.showNotification('Comment added successfully!', 'success');
+            } else {
+                window.taskManager.showNotification('Failed to add comment', 'error');
+            }
+        } catch (error) {
+            console.error('Error adding comment:', error);
+            window.taskManager.showNotification('Failed to add comment', 'error');
         }
-
-        window.taskManager.showNotification('Comment added successfully!', 'success');
     }
 
     clearComment() {
