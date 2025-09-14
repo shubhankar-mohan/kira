@@ -3,6 +3,7 @@ const { WebClient } = require('@slack/web-api');
 const crypto = require('crypto');
 const cron = require('node-cron');
 const googleSheetsService = require('./googleSheets');
+const { getFrontendBaseUrl } = require('../config/appConfig');
 const ScrumMasterFeatures = require('./scrumMasterFeatures');
 
 class SlackService {
@@ -16,6 +17,8 @@ class SlackService {
         this.scheduledJobs = [];
         this.scrumMaster = null; // Will be initialized after client is ready
         this.cleanupInterval = null;
+        this.processedEventIds = new Map(); // event_id -> processed at timestamp
+        this.threadLocks = new Set(); // thread_ts currently being created
         
         this.initialize();
     }
@@ -82,6 +85,49 @@ class SlackService {
             await this.handleSlashCommand(command, respond, client);
         });
 
+        // Message action: Create task from message (requires Slack app config)
+        this.app.shortcut('create_kira_task', async ({ shortcut, ack, client }) => {
+            await ack();
+            try {
+                const { message, channel } = shortcut;
+                if (!message || !message.ts || !channel || !channel.id) return;
+
+                // Prevent duplicates: see if thread already linked
+                const existing = await this.findTaskByThreadId(message.ts);
+                if (existing) {
+                    await client.chat.postEphemeral({
+                        channel: channel.id,
+                        user: shortcut.user.id,
+                        text: `ℹ️ A task is already linked to this message (ID: ${existing.id}).`
+                    });
+                    return;
+                }
+
+                // Create using the message as a mini-thread (root only)
+                const requester = await this.getUserBySlackId(shortcut.user.id);
+                const taskInfo = {
+                    title: (message.text || 'New Task').slice(0, 200),
+                    priority: 'P2',
+                    type: 'Feature',
+                    assignedUsers: [],
+                    dueDate: '',
+                    sprintPoints: 0,
+                    description: message.text || 'New Task'
+                };
+                const task = await this.createTaskFromSlack(taskInfo, requester, message.ts, channel.id);
+                const now = Date.now();
+                this.threadToTaskMap.set(message.ts, task.id);
+                this.threadTimestamps.set(message.ts, now);
+                await client.chat.postMessage({
+                    channel: channel.id,
+                    thread_ts: message.ts,
+                    blocks: this.buildTaskCreatedBlocks(task)
+                });
+            } catch (error) {
+                console.error('Error handling message action:', error);
+            }
+        });
+
         // Interactive components (buttons, modals)
         this.app.action('task_complete', async ({ ack, body, client }) => {
             await ack();
@@ -92,6 +138,49 @@ class SlackService {
             await ack();
             await this.handleTaskAssign(body, client);
         });
+    }
+
+    // Idempotent event processor to avoid duplicate handling
+    async processEvent(eventId, event, client) {
+        try {
+            const now = Date.now();
+            const key = eventId || `${event.type}:${event.ts || now}`;
+            if (this.processedEventIds.has(key)) {
+                console.log('Skipping duplicate Slack event', { key });
+                return;
+            }
+            this.processedEventIds.set(key, now);
+
+            switch (event.type) {
+                case 'app_mention':
+                    await this.handleAppMention(event, client);
+                    break;
+                case 'message':
+                    if (event.thread_ts) {
+                        await this.handleThreadMessage(event, client);
+                    }
+                    break;
+                case 'reaction_added':
+                    await this.handleReactionAdded(event, client);
+                    break;
+                default:
+                    break;
+            }
+        } catch (error) {
+            console.error('processEvent error:', error);
+        }
+    }
+
+    acquireThreadLock(threadTs) {
+        if (!threadTs) return true;
+        if (this.threadLocks.has(threadTs)) return false;
+        this.threadLocks.add(threadTs);
+        return true;
+    }
+
+    releaseThreadLock(threadTs) {
+        if (!threadTs) return;
+        this.threadLocks.delete(threadTs);
     }
 
     async handleReactionAdded(event, client) {
@@ -243,8 +332,7 @@ class SlackService {
         
         let cleanText = text.replace(firstMentionMatch[0], '').trim();
         
-        // Sanitize input to prevent potential issues
-        cleanText = cleanText.replace(/[<>]/g, ''); // Remove angle brackets
+        // Sanitize input to prevent potential issues but keep mentions for parsing
         cleanText = cleanText.substring(0, 500); // Limit length to prevent abuse
         
         // If the cleaned text is empty or too short, return null
@@ -254,9 +342,10 @@ class SlackService {
         const priorityMatch = cleanText.match(/\b(P[0-2])\b/i);
         const priority = priorityMatch ? priorityMatch[1].toUpperCase() : 'P2';
         
-        // Extract assigned users (excluding the bot mention)
-        const userMentions = text.match(/<@[UW][A-Z0-9]+>/g) || [];
-        const assignedUsers = userMentions.slice(1); // Skip the first mention (bot)
+        // Extract assigned users (excluding the bot mention) and normalize to user IDs
+        const mentionMatches = [...text.matchAll(/<@([UW][A-Z0-9]+)(\|[^>]+)?>/g)];
+        const allMentionIds = mentionMatches.map(m => m[1]);
+        const assignedUsers = allMentionIds.slice(1);
         
         // Extract task type
         const typeMatch = cleanText.match(/\b(bug|feature|improvement)\b/i);
@@ -270,14 +359,15 @@ class SlackService {
         const pointsMatch = cleanText.match(/(\d+)\s*points?/i);
         const sprintPoints = pointsMatch ? parseInt(pointsMatch[1]) : 0;
         
-        // Clean task title (remove extracted elements)
+        // Clean task title (remove extracted elements and any mentions)
         let title = cleanText
             .replace(/\b(P[0-2])\b/gi, '')
             .replace(/\b(bug|feature|improvement)\b/gi, '')
             .replace(/due\s+(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})/gi, '')
             .replace(/(\d+)\s*points?/gi, '')
-            .replace(/<@[UW][A-Z0-9]+>/g, '')
-            .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
+            .replace(/<@([UW][A-Z0-9]+)(\|[^>]+)?>/g, '')
+            .replace(/@[UW][A-Z0-9]+/g, '')
+            .replace(/\s+/g, ' ')
             .trim();
 
         // Ensure we have a meaningful title
@@ -439,16 +529,7 @@ class SlackService {
                 slackMessageTs: event.ts,
                 slackChannelId: event.channel
             });
-            // Log activity from Slack
-            try {
-                await googleSheetsService.addActivity({
-                    taskId: resolvedTaskId,
-                    user: userName,
-                    action: 'commented',
-                    details: event.text,
-                    source: 'slack'
-                });
-            } catch (e) { console.error('Failed to log activity (slack comment):', e.message); }
+            // Do not log Slack comments as activities; activity is for state changes
 
             // React to confirm comment was recorded
             await client.reactions.add({
@@ -507,6 +588,18 @@ class SlackService {
         switch (action) {
             case 'create':
                 await this.handleCreateCommand(args.slice(1), respond, command.user_id);
+                break;
+            case 'find':
+                await this.handleFindCommand(args.slice(1), respond);
+                break;
+            case 'my':
+                await this.handleMyCommand(args.slice(1), respond, command.user_id);
+                break;
+            case 'backlog':
+                await this.handleBacklogCommand(args.slice(1), respond);
+                break;
+            case 'block':
+                await this.handleBlockCommand(args.slice(1), respond, command.user_id);
                 break;
             case 'close':
                 await this.handleCloseCommand(args.slice(1), respond, command.user_id);
@@ -692,6 +785,60 @@ class SlackService {
                 response_type: 'ephemeral'
             });
         }
+    }
+
+    // Additional helpful commands
+    async handleFindCommand(args, respond) {
+        try {
+            const query = args.join(' ').toLowerCase();
+            if (!query) {
+                return respond({ text: 'Usage: /kira find <text>', response_type: 'ephemeral' });
+            }
+            const tasks = await googleSheetsService.getTasks();
+            const results = tasks.filter(t =>
+                (t.task || '').toLowerCase().includes(query) ||
+                (t.description || '').toLowerCase().includes(query)
+            ).slice(0, 10);
+            if (results.length === 0) {
+                return respond({ text: 'No tasks found.', response_type: 'ephemeral' });
+            }
+            const lines = results.map(t => `• ${t.id}: ${t.task} [${t.status}]`).join('\n');
+            respond({ text: `Results:\n${lines}`, response_type: 'ephemeral' });
+        } catch (e) { respond({ text: 'Error running search.', response_type: 'ephemeral' }); }
+    }
+
+    async handleMyCommand(args, respond, userId) {
+        try {
+            const user = await this.getUserBySlackId(userId);
+            if (!user || !user.email) return respond({ text: 'User not mapped to email.', response_type: 'ephemeral' });
+            const tasks = await googleSheetsService.getTasks();
+            const mine = tasks.filter(t => (t.assignedTo || '').includes(user.email)).slice(0, 10);
+            if (mine.length === 0) return respond({ text: 'No assigned tasks.', response_type: 'ephemeral' });
+            const lines = mine.map(t => `• ${t.id}: ${t.task} [${t.status}]`).join('\n');
+            respond({ text: `Your tasks:\n${lines}`, response_type: 'ephemeral' });
+        } catch (e) { respond({ text: 'Error fetching tasks.', response_type: 'ephemeral' }); }
+    }
+
+    async handleBacklogCommand(args, respond) {
+        try {
+            const tasks = await googleSheetsService.getTasks();
+            const backlog = tasks.filter(t => (t.priority === 'Backlog' || t.status === 'Not started')).slice(0, 10);
+            if (backlog.length === 0) return respond({ text: 'No backlog items found.', response_type: 'ephemeral' });
+            const lines = backlog.map(t => `• ${t.id}: ${t.task} [${t.status}]`).join('\n');
+            respond({ text: `Backlog:\n${lines}`, response_type: 'ephemeral' });
+        } catch (e) { respond({ text: 'Error fetching backlog.', response_type: 'ephemeral' }); }
+    }
+
+    async handleBlockCommand(args, respond, userId) {
+        try {
+            const taskId = args[0];
+            const reason = args.slice(1).join(' ') || 'No reason provided';
+            if (!taskId) return respond({ text: 'Usage: /kira block <TASK_ID> <reason>', response_type: 'ephemeral' });
+            const user = await this.getUserBySlackId(userId);
+            await googleSheetsService.updateTask(taskId, { status: 'Blocked - Engineering', lastEditedBy: user ? user.name : 'Slack User' });
+            await googleSheetsService.addActivity({ taskId, user: user ? user.name : 'Slack User', action: 'blocked', details: reason, source: 'slack' });
+            respond({ text: `🚫 Task ${taskId} marked blocked: ${reason}`, response_type: 'in_channel' });
+        } catch (e) { respond({ text: 'Error blocking task.', response_type: 'ephemeral' }); }
     }
 
     async handleSprintCommand(args, respond) {
@@ -1095,7 +1242,7 @@ class SlackService {
     }
 
     buildTaskCreatedBlocks(task) {
-        const taskUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/task/${task.id}`;
+        const taskUrl = `${getFrontendBaseUrl()}/task/${task.id}`;
         
         return [
             {
@@ -1281,7 +1428,7 @@ Create tasks by mentioning @kira: \`@kira Fix login bug @john @jane P1 Feature d
             for (const slackUserId of assignedUsers) {
                 const user = await this.getUserBySlackId(slackUserId);
                 if (user) {
-                    const taskUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/task/${task.id}`;
+                    const taskUrl = `${getFrontendBaseUrl()}/task/${task.id}`;
                     
                     await client.chat.postMessage({
                         channel: slackUserId, // DM to the user

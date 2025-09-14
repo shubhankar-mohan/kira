@@ -11,9 +11,12 @@ const usersRouter = require('./routes/users');
 const sprintsRouter = require('./routes/sprints');
 const slackRouter = require('./routes/slack');
 const { router: authRouter } = require('./routes/auth');
+const slackSecurity = require('./middleware/slackSecurity');
 
 const app = express();
 const PORT = process.env.PORT || 3001; // Changed to 3001 for single server
+// Respect X-Forwarded-* headers from reverse proxies/load balancers
+app.set('trust proxy', 1);
 
 // Security middleware with custom CSP
 app.use(helmet({
@@ -42,7 +45,29 @@ app.use(cors({
 // Logging middleware
 app.use(morgan('combined'));
 
-// Body parsing middleware
+// Slack routes: capture raw body via body-parser verify hook, then verify signature
+const saveRawBody = (req, res, buf, encoding) => {
+    if (buf && buf.length) {
+        req.rawBody = buf.toString(encoding || 'utf8');
+    }
+};
+
+app.use(
+    '/api/slack',
+    slackSecurity.logSlackRequests,
+    slackSecurity.slackRateLimit,
+    slackSecurity.validateSlackConfig,
+    slackSecurity.ipWhitelist,
+    // Parse urlencoded first (slash commands, interactive), capturing raw body
+    express.urlencoded({ extended: true, verify: saveRawBody }),
+    // Also parse JSON for Events API, capturing raw body
+    express.json({ type: ['application/json', 'application/*+json'], verify: saveRawBody }),
+    // Now that req.rawBody is set, verify Slack signature
+    slackSecurity.verifySlackRequest,
+    slackRouter
+);
+
+// Body parsing middleware for all other routes
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -72,7 +97,6 @@ app.use('/api/auth', authRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/sprints', sprintsRouter);
-app.use('/api/slack', slackRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

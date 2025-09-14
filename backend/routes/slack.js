@@ -1,63 +1,42 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const axios = require('axios');
 const { authenticateToken } = require('./auth');
+const { getFrontendBaseUrl } = require('../config/appConfig');
 const slackService = require('../services/slackService');
 const googleSheetsService = require('../services/googleSheets');
 
-// Middleware to verify Slack requests
-const verifySlackRequest = (req, res, next) => {
-    const signature = req.headers['x-slack-signature'];
-    const timestamp = req.headers['x-slack-request-timestamp'];
-    const body = JSON.stringify(req.body);
-
-    if (!signature || !timestamp) {
-        return res.status(400).json({ error: 'Missing Slack signature headers' });
-    }
-
-    if (!slackService.verifySlackRequest(signature, timestamp, body)) {
-        return res.status(401).json({ error: 'Invalid Slack signature' });
-    }
-
-    next();
-};
+// Slack request verification is handled centrally in server.js via slackSecurity middleware
 
 // Slack Events API endpoint
-router.post('/events', verifySlackRequest, async (req, res) => {
-    const { type, challenge, event } = req.body;
-    console.log('Slack Events API endpoint called', req.body);
+router.post('/events', async (req, res) => {
+    const { type, challenge, event, event_id } = req.body;
+    console.log('Slack Events API endpoint called', { type, eventType: event && event.type, event_id });
     // Handle URL verification challenge
     if (type === 'url_verification') {
         return res.json({ challenge });
     }
 
-    // Handle events
-    if (type === 'event_callback' && event) {
-        try {
-            switch (event.type) {
-                case 'app_mention':
-                    await slackService.handleAppMention(event, slackService.client);
-                    break;
-                case 'message':
-                    if (event.thread_ts) {
-                        await slackService.handleThreadMessage(event, slackService.client);
-                    }
-                    break;
-                case 'reaction_added':
-                    await slackService.handleReactionAdded(event, slackService.client);
-                    break;
-            }
-        } catch (error) {
-            console.error('Error handling Slack event:', error);
-        }
-    }
-
+    // Ack immediately to avoid Slack retries
     res.json({ ok: true });
+
+    // Process events asynchronously
+    if (type === 'event_callback' && event) {
+        setImmediate(async () => {
+            try {
+                await slackService.processEvent(event_id, event, slackService.client);
+            } catch (error) {
+                console.error('Error handling Slack event (async):', error);
+            }
+        });
+    }
 });
 
 // Slash command endpoint
-router.post('/commands', verifySlackRequest, async (req, res) => {
+router.post('/commands', async (req, res) => {
     const { command, text, user_id, channel_id, response_url } = req.body;
+    const thread_ts = req.body.thread_ts; // present when command is invoked within a thread
     console.log('Slash command endpoint called', req.body);
     // Validate required fields
     if (!command || !text || !user_id || !channel_id) {
@@ -69,31 +48,29 @@ router.post('/commands', verifySlackRequest, async (req, res) => {
 
     if (command === '/kira') {
         try {
-            const respond = (response) => {
-                // Ensure response has proper structure
-                const validResponse = {
-                    text: response.text || '✅ Command completed',
-                    response_type: response.response_type || 'ephemeral',
-                    ...response
-                };
-                res.json(validResponse);
+            // Ack immediately to prevent dispatch_failed on Slack side
+            res.json({ text: '⏳ Processing...', response_type: 'ephemeral' });
+
+            // Build responder that posts back using Slack's response_url
+            const responder = async (response) => {
+                try {
+                    await axios.post(response_url, {
+                        text: response.text || '✅ Command completed',
+                        response_type: response.response_type || 'ephemeral',
+                        blocks: response.blocks,
+                        attachments: response.attachments,
+                        ...(thread_ts ? { thread_ts } : {})
+                    });
+                } catch (e) {
+                    console.error('Failed to send slash response via response_url:', e);
+                }
             };
-            
-            // Pass the correct command structure expected by SlackService
-            const commandObj = {
-                text,
-                user_id,
-                channel_id,
-                response_url
-            };
-            
-            await slackService.handleSlashCommand(commandObj, respond, slackService.client);
+
+            const commandObj = { text, user_id, channel_id, response_url, thread_ts, frontendBaseUrl: getFrontendBaseUrl() };
+            slackService.handleSlashCommand(commandObj, responder, slackService.client)
+                .catch(err => console.error('Slash handler error:', err));
         } catch (error) {
             console.error('Slash command error:', error);
-            res.json({
-                text: '❌ Error processing command. Please try again.',
-                response_type: 'ephemeral'
-            });
         }
     } else {
         res.json({
@@ -104,7 +81,7 @@ router.post('/commands', verifySlackRequest, async (req, res) => {
 });
 
 // Interactive components endpoint (buttons, modals, etc.)
-router.post('/interactive', verifySlackRequest, async (req, res) => {
+router.post('/interactive', async (req, res) => {
     console.log('Interactive components endpoint called', req.body);
     try {
         // Safely parse JSON payload
