@@ -686,6 +686,7 @@ body {
     height: 100%;
     overflow-y: auto;
     padding: 24px;
+    scroll-behavior: smooth;
 }
 
 .section-header {
@@ -1902,6 +1903,14 @@ body {
 .modal-content::-webkit-scrollbar-thumb:hover,
 .modal-body::-webkit-scrollbar-thumb:hover {
     background: var(--gray-400);
+}
+
+/* Smooth scroll for key scrollable areas */
+.task-tab-content,
+.multiselect-dropdown,
+.sidebar,
+.board-filters .multiselect-dropdown {
+    scroll-behavior: smooth;
 }
 
 /* Mobile Touch Improvements */

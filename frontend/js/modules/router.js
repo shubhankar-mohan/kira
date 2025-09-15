@@ -70,7 +70,11 @@ class Router {
         
         // Handle special case for task detail page
         if (page === 'task-detail' && this.currentTaskId) {
-            window.taskManager.showTaskDetailPage(this.currentTaskId);
+            if (window.app && typeof window.app.showTaskDetailPage === 'function') {
+                window.app.showTaskDetailPage(this.currentTaskId);
+            } else if (window.modalManager && typeof window.modalManager.openTaskDetails === 'function') {
+                window.modalManager.openTaskDetails(this.currentTaskId);
+            }
             return;
         }
         

@@ -85,8 +85,13 @@ class ModalManager {
         // Handle button actions
         document.addEventListener('click', (e) => {
             const action = e.target.dataset.action;
+            // Support elements with data-action on ancestors (e.g., icons inside buttons)
+            const clickable = action ? e.target : e.target.closest('[data-action]');
+            const resolvedAction = action || clickable?.dataset.action;
             if (action) {
                 this.handleAction(action, e);
+            } else if (clickable && resolvedAction) {
+                this.handleAction(resolvedAction, { ...e, target: clickable });
             }
         });
     }
@@ -107,6 +112,11 @@ class ModalManager {
         formInputs.forEach(input => {
             input.addEventListener('input', () => {
                 clearTimeout(saveTimeout);
+                // Mark the parent modal as dirty for unified confirmation behavior
+                const modalOverlay = input.closest('.task-modal-overlay');
+                if (modalOverlay) {
+                    modalOverlay.dataset.dirty = 'true';
+                }
                 saveTimeout = setTimeout(() => this.autoSaveTask(), 2000);
             });
         });
@@ -144,6 +154,7 @@ class ModalManager {
 
     handleAction(action, event) {
         const sprintId = event.target.dataset.sprintId;
+        const page = event.target.dataset.page || event.target.closest('[data-page]')?.dataset.page;
         
         // Prevent duplicate calls from event bubbling
         if (action === 'toggleCurrentSprint') {
@@ -187,6 +198,37 @@ class ModalManager {
                 if (window.taskBoardManager) {
                     window.taskBoardManager.toggleCurrentSprintFilter();
                 }
+                break;
+            case 'navigateTo':
+                if (page && window.router) {
+                    window.router.navigateToPage(page);
+                }
+                break;
+            case 'saveTaskDetailsFromPage':
+                if (window.app) {
+                    const taskData = {
+                        task: document.getElementById('pageTaskTitle')?.value || '',
+                        status: document.getElementById('pageTaskStatus')?.value || 'Not started',
+                        priority: document.getElementById('pageTaskPriority')?.value || 'P2',
+                        type: document.getElementById('pageTaskType')?.value || 'Feature',
+                        description: document.getElementById('pageTaskDescription')?.value || '',
+                        assignedTo: document.getElementById('pageTaskAssignee')?.value || '',
+                        sprintWeek: document.getElementById('pageTaskSprint')?.value || ''
+                    };
+                    window.app.saveTaskDetailsFromPage(taskData);
+                }
+                break;
+            case 'addComment':
+                this.addComment();
+                break;
+            case 'clearComment':
+                this.clearComment();
+                break;
+            case 'deleteTask':
+                this.deleteTask();
+                break;
+            case 'closeTaskModal':
+                this.closeTaskModal();
                 break;
             case 'openUserDetails':
                 const userId = event.target.closest('[data-user-id]')?.dataset.userId;
@@ -541,7 +583,7 @@ class ModalManager {
             
             // Check for unsaved changes in create task modal
             if (modalId === 'createTaskModal') {
-                const hasChanges = this.hasUnsavedFormChanges(modalId);
+                const hasChanges = this.hasUnsavedFormChanges(modalId) || modal.dataset.dirty === 'true';
                 if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to close?')) {
                     return;
                 }
@@ -554,6 +596,7 @@ class ModalManager {
             // Clear any form data if it's a create modal
             if (modalId === 'createTaskModal') {
                 this.clearCreateTaskForm();
+                delete modal.dataset.dirty;
             }
         }
     }
@@ -785,6 +828,10 @@ class ModalManager {
                 
                 // Clear localStorage
                 localStorage.removeItem('taskChanges');
+                const modal = document.getElementById('taskDetailsModal');
+                if (modal) {
+                    delete modal.dataset.dirty;
+                }
                 
             } else {
                 window.taskManager.showNotification('Failed to update task: ' + response.error, 'error');
@@ -988,7 +1035,7 @@ class ModalManager {
         const modal = document.getElementById('taskDetailsModal');
         if (modal) {
             // Check for unsaved changes
-            const hasChanges = localStorage.getItem('taskChanges');
+            const hasChanges = modal.dataset.dirty === 'true' || localStorage.getItem('taskChanges');
             if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to close?')) {
                 return;
             }
@@ -1001,6 +1048,7 @@ class ModalManager {
                     modal.style.display = 'none';
                     modal.classList.remove('show');
                     localStorage.removeItem('taskChanges');
+                    delete modal.dataset.dirty;
                     // Reset animation
                     modalContainer.style.animation = '';
                 }, 400);
@@ -1009,6 +1057,7 @@ class ModalManager {
                 modal.style.display = 'none';
                 modal.classList.remove('show');
                 localStorage.removeItem('taskChanges');
+                delete modal.dataset.dirty;
             }
         }
     }

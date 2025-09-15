@@ -13,6 +13,14 @@ class App {
         
         // Check authentication
         await window.authManager.checkAuth();
+
+        // After auth, load initial data and honor deep links like /task/:id
+        // This ensures router.pendingTaskNavigation is processed
+        try {
+            await this.loadInitialData();
+        } catch (e) {
+            console.error('Initial data load failed:', e);
+        }
     }
 
     initializeModules() {
@@ -208,7 +216,7 @@ class App {
                             <div class="section-header">
                                 <h4 class="section-title">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="9 11l3 3 8-8"></path>
+                                        <path d="M9 11l3 3 8-8"></path>
                                         <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9"></path>
                                     </svg>
                                     Task Information

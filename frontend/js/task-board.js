@@ -442,6 +442,19 @@ class TaskBoardManager {
         console.log('📋 Total tasks before filtering:', this.allTasks.length);
         
         this.filteredTasks = this.filterTasks(this.allTasks);
+
+        // If current-sprint filter produces zero tasks but we have tasks overall,
+        // fall back to showing all tasks to avoid an empty board when no sprint is marked current.
+        if (this.filteredTasks.length === 0 && this.allTasks.length > 0) {
+            const hasCurrent = (window.taskManager?.sprints || []).some(s => s.isCurrent) ||
+                               (window.taskManager?.sprints || []).some(s => s.status === 'Active');
+            if (!hasCurrent) {
+                console.log('ℹ️ No current/active sprint detected. Falling back to show all tasks.');
+                this.activeFilters.sprint = ['all'];
+                this.activeFilters.currentSprintOnly = false;
+                this.filteredTasks = this.filterTasks(this.allTasks);
+            }
+        }
         
         console.log('📋 Tasks after filtering:', this.filteredTasks.length);
         this.renderFilteredTasks();

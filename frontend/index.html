@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kira Task Manager</title>
+    <base href="/">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/styles.css?v=99&cb=1756640064">
     <link rel="stylesheet" href="css/login.css?v=99&cb=1756640064">
@@ -396,7 +397,7 @@
                     <div id="taskDetailSection" class="page-section hidden">
                         <div class="section-header">
                             <div class="task-detail-header">
-                                <button class="back-button">
+                                <button class="back-button" data-action="navigateTo" data-page="board">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <polyline points="15,18 9,12 15,6"></polyline>
                                     </svg>
@@ -1019,21 +1020,21 @@
             <!-- Modal Body with Tabs -->
             <div class="task-modal-body">
                 <div class="task-tab-navigation">
-                    <button class="task-tab-button active" onclick="switchTaskTab('details')">
+                    <button class="task-tab-button active" data-action="switchTaskTab" data-tab="details">
                         <svg class="task-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M9 11l3 3 8-8"></path>
                             <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9"></path>
                         </svg>
                         Details
                     </button>
-                    <button class="task-tab-button" onclick="switchTaskTab('activity')">
+                    <button class="task-tab-button" data-action="switchTaskTab" data-tab="activity">
                         <svg class="task-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                             <polyline points="12,6 12,12 16,14"></polyline>
                         </svg>
                         Activity
                     </button>
-                    <button class="task-tab-button" onclick="switchTaskTab('comments')">
+                    <button class="task-tab-button" data-action="switchTaskTab" data-tab="comments">
                         <svg class="task-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                         </svg>
@@ -1251,8 +1252,8 @@
                                         rows="3"
                                     ></textarea>
                                     <div class="task-comment-actions">
-                                        <button class="task-btn task-btn-sm task-btn-secondary" onclick="clearComment()">Cancel</button>
-                                        <button class="task-btn task-btn-sm task-btn-primary" onclick="addComment()">
+                                        <button class="task-btn task-btn-sm task-btn-secondary" data-action="clearComment">Cancel</button>
+                                        <button class="task-btn task-btn-sm task-btn-primary" data-action="addComment">
                                             <svg class="task-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <line x1="22" y1="2" x2="11" y2="13"></line>
                                                 <polygon points="22,2 15,22 11,13 2,9 22,2"></polygon>
@@ -1282,7 +1283,7 @@
                     <span id="autoSaveStatus">Auto-saved 2 minutes ago</span>
                 </div>
                 <div class="task-footer-actions">
-                    <button type="button" class="task-btn task-btn-danger" onclick="deleteTask()">
+                    <button type="button" class="task-btn task-btn-danger" data-action="deleteTask">
                         <svg class="task-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="3,6 5,6 21,6"></polyline>
                             <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
@@ -1296,7 +1297,7 @@
                         </svg>
                         Cancel
                     </button>
-                    <button type="submit" class="task-btn task-btn-primary" onclick="saveTaskDetails()">
+                    <button type="submit" class="task-btn task-btn-primary" data-action="saveTaskDetails">
                         <svg class="task-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                             <polyline points="17,21 17,13 7,13 7,21"></polyline>
@@ -1384,68 +1385,13 @@
 
     <!-- Global functions for enhanced task modal -->
     <script>
-        // Tab switching functionality
-        function switchTaskTab(tabName) {
-            if (window.modalManager) {
-                window.modalManager.switchTaskTab(tabName);
-            }
-        }
-
-        // Comment functionality
-        function addComment() {
-            if (window.modalManager) {
-                window.modalManager.addComment();
-            }
-        }
-
-        function clearComment() {
-            if (window.modalManager) {
-                window.modalManager.clearComment();
-            }
-        }
-
-        // Task modal actions
-        function closeTaskModal() {
-            if (window.modalManager) {
-                window.modalManager.closeTaskModal();
-            }
-        }
-
-        function deleteTask() {
-            if (window.modalManager) {
-                window.modalManager.deleteTask();
-            }
-        }
-
-        function saveTaskDetails() {
-            if (window.modalManager) {
-                window.modalManager.saveTaskDetails();
-            }
-        }
-
-        // Keyboard shortcuts
+        // Remove redundant inline global handlers; centralized handlers exist in modules
+        // Preserve only Ctrl/Cmd+S for page-level task detail save
         document.addEventListener('keydown', function(e) {
-            // Escape to close
-            if (e.key === 'Escape') {
-                const openModal = document.querySelector('.task-modal-overlay');
-                if (openModal) {
-                    closeTaskModal();
-                }
-            }
-            
-            // Ctrl+S to save (Cmd+S on Mac)
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                saveTaskDetails();
-            }
-            
-            // Tab navigation with Ctrl+Number
-            if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '3') {
-                e.preventDefault();
-                const tabIndex = parseInt(e.key) - 1;
-                const tabs = ['details', 'activity', 'comments'];
-                if (tabs[tabIndex]) {
-                    switchTaskTab(tabs[tabIndex]);
+                if (window.modalManager) {
+                    window.modalManager.saveTaskDetails();
                 }
             }
         });

@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path'); // Added for path.join
+const { getFrontendBaseUrl } = require('./config/appConfig');
 
 // Route imports
 const tasksRouter = require('./routes/tasks');
@@ -152,6 +153,8 @@ app.listen(PORT, () => {
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
     console.log(`📋 API docs: http://localhost:${PORT}/api`);
     console.log(`🌐 Frontend: http://localhost:${PORT}/`);
+    console.log(`🔗 Frontend Base URL (env): ${process.env.FRONTEND_BASE_URL || process.env.FRONTEND_URL || 'not set'}`);
+    console.log(`🔗 Frontend Base URL (resolved): ${getFrontendBaseUrl()}`);
 });
 
 module.exports = app;
