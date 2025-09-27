@@ -478,7 +478,17 @@ class TaskManager {
         }
     }
 
-    showCreateTaskModal() {
+    async showCreateTaskModal() {
+        // Ensure users and sprints are loaded before opening modal
+        if (!this.users || this.users.length === 0) {
+            console.log('Loading users before opening create task modal...');
+            await this.loadUsers();
+        }
+        if (!this.sprints || this.sprints.length === 0) {
+            console.log('Loading sprints before opening create task modal...');
+            await this.loadSprints();
+        }
+        
         if (window.modalManager) {
             window.modalManager.showModal('createTaskModal');
             // Hydrate fields with safe defaults to avoid empty modal feel
@@ -498,9 +508,15 @@ class TaskManager {
         }
     }
 
-    openTaskDetails(taskId) {
+    async openTaskDetails(taskId) {
         if (window.modalManager) {
-            window.modalManager.openTaskDetails(taskId);
+            await window.modalManager.openTaskDetails(taskId);
+        }
+    }
+
+    async saveTaskDetails() {
+        if (window.modalManager) {
+            return await window.modalManager.saveTaskDetails();
         }
     }
 

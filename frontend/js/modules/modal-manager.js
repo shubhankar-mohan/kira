@@ -164,7 +164,11 @@ class ModalManager {
         
         switch (action) {
             case 'showCreateTaskModal':
-                this.showModal('createTaskModal');
+                if (window.taskManager) {
+                    window.taskManager.showCreateTaskModal();
+                } else {
+                    this.showModal('createTaskModal');
+                }
                 break;
             case 'showCreateUserModal':
                 this.showModal('createUserModal');
@@ -197,6 +201,12 @@ class ModalManager {
             case 'toggleCurrentSprintFilter':
                 if (window.taskBoardManager) {
                     window.taskBoardManager.toggleCurrentSprintFilter();
+                }
+                break;
+            case 'switchTaskTab':
+                {
+                    const tabName = event.target.dataset.tab;
+                    if (tabName) this.switchTaskTab(tabName);
                 }
                 break;
             case 'navigateTo':
@@ -433,7 +443,7 @@ class ModalManager {
         };
     }
 
-    showModal(modalId) {
+    async showModal(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) {
             // Reset any previous animations
@@ -448,10 +458,13 @@ class ModalManager {
             // Special handling for create task modal
             if (modalId === 'createTaskModal') {
                 // Re-populate dropdowns with latest data
-                this.refreshCreateTaskDropdowns();
+                await this.refreshCreateTaskDropdowns();
                 // Ensure body exists/visible
                 const body = modal.querySelector('.task-modal-body');
                 if (body) body.style.display = '';
+                // Ensure footer visible
+                const footer = modal.querySelector('.task-modal-footer');
+                if (footer) footer.style.display = '';
             }
             
             // Ensure edit modal has a visible Save button
@@ -486,23 +499,35 @@ class ModalManager {
     }
     
     // Method to refresh all dropdowns in create task modal
-    refreshCreateTaskDropdowns() {
-        this.refreshAssigneeDropdown();
-        this.refreshSprintDropdown();
+    async refreshCreateTaskDropdowns() {
+        await this.refreshAssigneeDropdown();
+        await this.refreshSprintDropdown();
     }
     
     // Method to refresh assignee dropdown data
-    refreshAssigneeDropdown() {
+    async refreshAssigneeDropdown() {
         const assigneeDropdown = document.getElementById('taskAssigneeDropdown');
         if (!assigneeDropdown) return;
         
-        if (!window.taskManager || !window.taskManager.users) {
+        if (!window.taskManager || !window.taskManager.users || window.taskManager.users.length === 0) {
             console.log('refreshAssigneeDropdown: no users available', {
                 taskManager: !!window.taskManager,
                 users: window.taskManager?.users?.length || 0
             });
-            assigneeDropdown.innerHTML = '<div class="multiselect-option disabled">No users available</div>';
-            return;
+            // Try fetching users as a fallback
+            try {
+                const res = await api.getUsers();
+                const users = res?.data || res?.users || [];
+                if (Array.isArray(users) && users.length) {
+                    window.taskManager.users = users;
+                }
+            } catch (e) {
+                console.warn('refreshAssigneeDropdown: fetch users failed');
+            }
+            if (!window.taskManager.users || window.taskManager.users.length === 0) {
+                assigneeDropdown.innerHTML = '<div class="multiselect-option disabled">No users available</div>';
+                return;
+            }
         }
         
         console.log('refreshAssigneeDropdown: populating', window.taskManager.users.length, 'users');
@@ -516,17 +541,29 @@ class ModalManager {
     }
     
     // Method to refresh sprint dropdown data
-    refreshSprintDropdown() {
+    async refreshSprintDropdown() {
         const sprintSelect = document.getElementById('taskSprint');
         if (!sprintSelect) return;
         
-        if (!window.taskManager || !window.taskManager.sprints) {
+        if (!window.taskManager || !window.taskManager.sprints || window.taskManager.sprints.length === 0) {
             console.log('refreshSprintDropdown: no sprints available', {
                 taskManager: !!window.taskManager,
                 sprints: window.taskManager?.sprints?.length || 0
             });
-            sprintSelect.innerHTML = '<option value="">No Sprint</option><option disabled>No sprints available</option>';
-            return;
+            // Try fetching sprints as a fallback
+            try {
+                const res = await api.getSprints();
+                const sprints = res?.data || res?.sprints || [];
+                if (Array.isArray(sprints) && sprints.length) {
+                    window.taskManager.sprints = sprints;
+                }
+            } catch (e) {
+                console.warn('refreshSprintDropdown: fetch sprints failed');
+            }
+            if (!window.taskManager.sprints || window.taskManager.sprints.length === 0) {
+                sprintSelect.innerHTML = '<option value="">No Sprint</option><option disabled>No sprints available</option>';
+                return;
+            }
         }
         
         console.log('refreshSprintDropdown: populating', window.taskManager.sprints.length, 'sprints');
@@ -602,7 +639,7 @@ class ModalManager {
     }
 
     // Enhanced task modal methods
-    openTaskDetails(taskId) {
+    async openTaskDetails(taskId) {
         if (!taskId) return;
         
         // Find the task in our tasks array
@@ -610,6 +647,16 @@ class ModalManager {
         if (!task) {
             window.taskManager.showNotification('Task not found', 'error');
             return;
+        }
+
+        // Ensure users and sprints are loaded before opening modal
+        if (!window.taskManager.users || window.taskManager.users.length === 0) {
+            console.log('Loading users before opening task details modal...');
+            await window.taskManager.loadUsers();
+        }
+        if (!window.taskManager.sprints || window.taskManager.sprints.length === 0) {
+            console.log('Loading sprints before opening task details modal...');
+            await window.taskManager.loadSprints();
         }
 
         // Populate the modal fields
@@ -704,15 +751,28 @@ class ModalManager {
     }
 
     populateTaskDetailsDropdowns() {
+        console.log('populateTaskDetailsDropdowns called');
         // Populate assignee dropdown
         const assigneeSelect = document.getElementById('detailTaskAssignee');
+        console.log('assigneeSelect element:', assigneeSelect);
+        console.log('window.taskManager:', window.taskManager);
+        console.log('window.taskManager.users:', window.taskManager?.users);
+        
         if (assigneeSelect && window.taskManager && window.taskManager.users) {
+            console.log('Populating assignee dropdown with', window.taskManager.users.length, 'users');
             assigneeSelect.innerHTML = '<option value="">Select assignee</option>';
             window.taskManager.users.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user.email;
                 option.textContent = user.name || user.email;
                 assigneeSelect.appendChild(option);
+            });
+        } else {
+            console.warn('Could not populate assignee dropdown:', {
+                hasElement: !!assigneeSelect,
+                hasTaskManager: !!window.taskManager,
+                hasUsers: !!(window.taskManager?.users),
+                userCount: window.taskManager?.users?.length || 0
             });
         }
 
@@ -918,11 +978,13 @@ class ModalManager {
         document.querySelectorAll('.task-tab-button').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.task-tab-panel').forEach(panel => panel.classList.remove('active'));
         
-        // Add active class to clicked tab button
-        event.target.classList.add('active');
+        // Add active class to the matching tab button
+        const targetBtn = document.querySelector(`.task-tab-button[data-tab="${tabName}"]`);
+        if (targetBtn) targetBtn.classList.add('active');
         
         // Show corresponding panel
-        document.getElementById(tabName + '-panel').classList.add('active');
+        const targetPanel = document.getElementById(`${tabName}-panel`);
+        if (targetPanel) targetPanel.classList.add('active');
     }
 
     // Auto-save functionality
@@ -1100,7 +1162,7 @@ class ModalManager {
         };
         
         // Toggle dropdown
-        assigneeDisplay.addEventListener('click', (e) => {
+        assigneeDisplay.addEventListener('click', async (e) => {
             e.stopPropagation();
             
             // Close other multiselect dropdowns first
@@ -1115,6 +1177,11 @@ class ModalManager {
             
             // Populate when opening
             if (assigneeContainer.classList.contains('open')) {
+                // Ensure users are loaded before populating
+                if (!window.taskManager.users || window.taskManager.users.length === 0) {
+                    console.log('Loading users for assignee dropdown...');
+                    await window.taskManager.loadUsers();
+                }
                 populateAssignees();
             }
         });

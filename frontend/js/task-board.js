@@ -932,12 +932,12 @@ class TaskBoardManager {
         `;
 
         // Add click handler to the entire card (excluding copy icon)
-        card.addEventListener('click', (e) => {
+        card.addEventListener('click', async (e) => {
             // Don't open details if clicking on copy icon
             if (!e.target.closest('.task-actions') && !e.target.closest('.copy-icon')) {
                 e.preventDefault();
                 e.stopPropagation();
-                openTaskDetails(task.id);
+                await openTaskDetails(task.id);
             }
         });
 
@@ -1028,9 +1028,9 @@ function toggleCardExpansion(card) {
     }
 }
 
-function openTaskDetails(taskId) {
+async function openTaskDetails(taskId) {
     if (window.taskManager) {
-        window.taskManager.openTaskDetails(taskId);
+        await window.taskManager.openTaskDetails(taskId);
     }
 }
 
