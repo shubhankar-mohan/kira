@@ -16,7 +16,7 @@ Light mode only - following the exact design specification
     gap: 16px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 20px 24px 120px 24px; /* Increased bottom padding from 60px to 120px */
+    padding: 20px 24px 180px 24px;
     height: 100%;
     scroll-behavior: smooth;
     /* Enhanced touch scroll handling */
@@ -228,6 +228,13 @@ Light mode only - following the exact design specification
     white-space: nowrap;
 }
 
+.sprint-id {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-left: 8px;
+    user-select: text;
+}
+
 /* Sprint color coding */
 .sprint-current {
     background: #dbeafe;
@@ -251,14 +258,75 @@ Light mode only - following the exact design specification
 
 .task-actions {
     display: flex;
-    gap: 4px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
 }
 
-.task-card:hover .task-actions {
+.task-select-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.board-pagination {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    background: #f8fafc;
+    padding: 12px 24px;
+    border-top: 1px solid #e2e8f0;
+    z-index: 20;
+}
+
+.bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: opacity 0.2s ease;
+    opacity: 0.6;
+}
+
+.bulk-actions.active {
     opacity: 1;
+}
+
+.bulk-actions .btn {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.bulk-count {
+    font-size: 13px;
+    color: #475569;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pagination-controls .btn {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.pagination-label {
+    font-size: 13px;
+    color: #475569;
+}
+
+.pagination-size {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+    background: white;
+    color: #334155;
 }
 
 .action-btn {

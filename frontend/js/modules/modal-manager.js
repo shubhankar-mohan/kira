@@ -177,10 +177,16 @@ class ModalManager {
                 this.showCreateSprintModal();
                 break;
             case 'saveTaskDetails':
-                this.saveTaskDetails();
+                event.preventDefault();
+                event.stopPropagation();
+                if (this.validateTaskDetailForm()) {
+                    this.saveTaskDetails();
+                }
                 break;
             case 'createTask':
-                window.taskManager.createTask();
+                if (this.validateCreateTaskForm()) {
+                    window.taskManager.createTask();
+                }
                 break;
             case 'createUser':
                 if (window.uiManager) {
@@ -188,7 +194,13 @@ class ModalManager {
                 }
                 break;
             case 'createSprint':
-                window.sprintManager.createSprint();
+                if (window.sprintManager && typeof window.sprintManager.createSprint === 'function') {
+                    window.sprintManager.createSprint();
+                } else if (window.uiManager && typeof window.uiManager.createSprint === 'function') {
+                    window.uiManager.createSprint();
+                } else {
+                    console.warn('Sprint creation handler not available');
+                }
                 break;
             case 'syncData':
                 window.taskManager.syncData();
@@ -240,6 +252,12 @@ class ModalManager {
             case 'closeTaskModal':
                 this.closeTaskModal();
                 break;
+            case 'generateUserPassword':
+                this.generateUserPassword();
+                break;
+            case 'copyUserPassword':
+                this.copyUserPassword();
+                break;
             case 'openUserDetails':
                 const userId = event.target.closest('[data-user-id]')?.dataset.userId;
                 if (userId) {
@@ -286,7 +304,7 @@ class ModalManager {
 
             // Update in backend - only send the essential data to avoid conflicts
             console.log('📡 Making API call to update sprint...');
-            const response = await api.updateSprint(sprint.sprintWeek || sprint.name, { 
+            const response = await api.updateSprint(sprint.id, { 
                 isCurrent: newStatus 
             });
             console.log('📡 API response:', response);
@@ -1349,6 +1367,65 @@ class ModalManager {
             // Re-populate dropdowns to ensure they have latest data
             this.refreshCreateTaskDropdowns();
         }
+    }
+
+    validateCreateTaskForm() {
+        const title = document.getElementById('taskTitle');
+        const priority = document.getElementById('taskPriority');
+        const type = document.getElementById('taskType');
+
+        if (!title?.value?.trim()) {
+            window.uiManager?.showNotification('Task title is required.', 'error');
+            title?.focus();
+            return false;
+        }
+
+        if (!priority?.value) {
+            window.uiManager?.showNotification('Task priority is required.', 'error');
+            priority?.focus();
+            return false;
+        }
+
+        if (!type?.value) {
+            window.uiManager?.showNotification('Task type is required.', 'error');
+            type?.focus();
+            return false;
+        }
+
+        return true;
+    }
+
+    validateTaskDetailForm() {
+        const title = document.getElementById('detailTaskTitle');
+        const status = document.getElementById('detailTaskStatus');
+        const priority = document.getElementById('detailTaskPriority');
+        const type = document.getElementById('detailTaskType');
+
+        if (!title?.value?.trim()) {
+            window.uiManager?.showNotification('Task title is required.', 'error');
+            title?.focus();
+            return false;
+        }
+
+        if (!status?.value) {
+            window.uiManager?.showNotification('Task status is required.', 'error');
+            status?.focus();
+            return false;
+        }
+
+        if (!priority?.value) {
+            window.uiManager?.showNotification('Task priority is required.', 'error');
+            priority?.focus();
+            return false;
+        }
+
+        if (!type?.value) {
+            window.uiManager?.showNotification('Task type is required.', 'error');
+            type?.focus();
+            return false;
+        }
+
+        return true;
     }
 }
 

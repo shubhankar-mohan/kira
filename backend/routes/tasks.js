@@ -1,39 +1,54 @@
 const express = require('express');
 const router = express.Router();
-const googleSheets = require('../services/googleSheets');
+const db = require('../services/dbAdapter');
 const slackService = require('../services/slackService');
 
-// Get all tasks
+function mapStatusToEnum(status) {
+    if (!status) return undefined;
+    const normalized = String(status).trim().toLowerCase();
+    const map = {
+        'not started': 'PENDING',
+        'pending': 'PENDING',
+        'in progress': 'IN_PROGRESS',
+        'dev testing': 'DEV_TESTING',
+        'product testing': 'PRODUCT_BLOCKED',
+        'awaiting release': 'DEV_TESTING',
+        'done': 'DONE',
+        'blocked - product': 'PRODUCT_BLOCKED',
+        'blocked - engineering': 'ENGG_BLOCKED'
+    };
+    return map[normalized] || status;
+}
+
+function mapPriorityToEnum(priority) {
+    if (!priority) return undefined;
+    const normalized = String(priority).trim().toLowerCase();
+    const map = {
+        'p0': 'P0',
+        'p1': 'P1',
+        'p2': 'P2',
+        'backlog': 'BACKLOG'
+    };
+    return map[normalized] || priority;
+}
+
+function mapTypeToEnum(type) {
+    if (!type) return undefined;
+    const normalized = String(type).trim().toLowerCase();
+    const map = {
+        'feature': 'Feature',
+        'bug': 'Bug',
+        'improvement': 'Improvement',
+        'task': 'Task'
+    };
+    return map[normalized] || type;
+}
+
+// Get all tasks (with optional filters and pagination)
 router.get('/', async (req, res) => {
     try {
-        const tasks = await googleSheets.getTasks();
-        
-        // Apply filters if provided
-        let filteredTasks = tasks;
-        
-        if (req.query.status) {
-            filteredTasks = filteredTasks.filter(task => task.status === req.query.status);
-        }
-        
-        if (req.query.assignee) {
-            filteredTasks = filteredTasks.filter(task => 
-                task.assignedTo && task.assignedTo.includes(req.query.assignee)
-            );
-        }
-        
-        if (req.query.sprint) {
-            filteredTasks = filteredTasks.filter(task => task.sprintWeek === req.query.sprint);
-        }
-        
-        if (req.query.priority) {
-            filteredTasks = filteredTasks.filter(task => task.priority === req.query.priority);
-        }
-
-        res.json({
-            success: true,
-            data: filteredTasks,
-            total: filteredTasks.length
-        });
+        const { items, total } = await db.getTasksFiltered(req.query);
+        res.json({ success: true, data: items, total, page: Number(req.query.page||1), pageSize: Number(req.query.pageSize||20), hasNext: (Number(req.query.page||1) * Number(req.query.pageSize||20)) < total });
     } catch (error) {
         console.error('Error fetching tasks:', error);
         res.status(500).json({ 
@@ -46,8 +61,15 @@ router.get('/', async (req, res) => {
 // Get single task by ID
 router.get('/:id', async (req, res) => {
     try {
-        const tasks = await googleSheets.getTasks();
-        const task = tasks.find(t => t.id === req.params.id);
+        // Support lookup by shortId pattern kira-XXXXXX
+        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
+        let task = null;
+        const tasks = await db.getTasks();
+        if (isShort) {
+            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
+        } else {
+            task = tasks.find(t => t.id === req.params.id);
+        }
         
         if (!task) {
             return res.status(404).json({ 
@@ -57,14 +79,14 @@ router.get('/:id', async (req, res) => {
         }
 
         // Get comments for this task (sorted: newest first)
-        const comments = (await googleSheets.getComments(req.params.id)).sort((a, b) => {
+        const comments = (await db.getComments(task.id)).sort((a, b) => {
             const ta = new Date(a.timestamp).getTime() || 0;
             const tb = new Date(b.timestamp).getTime() || 0;
             return tb - ta;
         });
 
         // Get activities for this task (sorted: newest first)
-        const activities = (await googleSheets.getActivities(req.params.id)).sort((a, b) => {
+        const activities = (await db.getActivities(task.id)).sort((a, b) => {
             const ta = new Date(a.timestamp).getTime() || 0;
             const tb = new Date(b.timestamp).getTime() || 0;
             return tb - ta;
@@ -89,7 +111,10 @@ router.post('/', async (req, res) => {
         const taskData = {
             ...req.body,
             id: req.body.id || Date.now().toString(),
-            createdBy: req.body.createdBy || 'API User'
+            createdBy: req.body.createdBy || 'API User',
+            status: mapStatusToEnum(req.body.status),
+            priority: mapPriorityToEnum(req.body.priority),
+            type: mapTypeToEnum(req.body.type)
         };
 
         // Validate required fields
@@ -100,10 +125,10 @@ router.post('/', async (req, res) => {
             });
         }
 
-        const newTask = await googleSheets.createTask(taskData);
+        const newTask = await db.createTask(taskData);
         // Record activity
         try {
-            await googleSheets.addActivity({
+            await db.addActivity({
                 taskId: newTask.id,
                 user: taskData.createdBy || 'API User',
                 action: 'created',
@@ -116,7 +141,7 @@ router.post('/', async (req, res) => {
         try {
             const { channel, thread_ts } = await slackService.postTaskCreatedThread({ ...newTask, id: newTask.id });
             // Persist Slack thread & channel onto task
-            await googleSheets.updateTask(newTask.id, {
+            await db.updateTask(newTask.id, {
                 slackThreadId: thread_ts,
                 slackChannelId: channel,
                 lastEditedBy: taskData.createdBy || 'API User'
@@ -146,14 +171,17 @@ router.put('/:id', async (req, res) => {
     try {
         const updates = {
             ...req.body,
-            lastEditedBy: req.body.lastEditedBy || 'API User'
+            lastEditedBy: req.body.lastEditedBy || 'API User',
+            status: mapStatusToEnum(req.body.status),
+            priority: mapPriorityToEnum(req.body.priority),
+            type: mapTypeToEnum(req.body.type)
         };
         
-        const updatedTask = await googleSheets.updateTask(req.params.id, updates);
+        const updatedTask = await db.updateTask(req.params.id, updates);
         // Record activity for updates
         try {
             const fields = Object.keys(updates).filter(k => !['lastEditedBy'].includes(k));
-            await googleSheets.addActivity({
+            await db.addActivity({
                 taskId: req.params.id,
                 user: updates.lastEditedBy,
                 action: 'updated',
@@ -186,7 +214,7 @@ router.put('/:id', async (req, res) => {
 // Delete task
 router.delete('/:id', async (req, res) => {
     try {
-        await googleSheets.deleteTask(req.params.id);
+        await db.deleteTask(req.params.id);
         
         res.json({
             success: true,
@@ -217,7 +245,7 @@ router.post('/:id/comments', async (req, res) => {
             });
         }
 
-        const tasks = await googleSheets.getTasks();
+        const tasks = await db.getTasks();
         const task = tasks.find(t => t.id === req.params.id);
 
         let slackMessageTs = '';
@@ -236,7 +264,7 @@ router.post('/:id/comments', async (req, res) => {
         }
 
         // Add a single comment row in Sheets with Slack metadata if available
-        const newComment = await googleSheets.addComment({
+        const newComment = await db.addComment({
             ...commentData,
             source: 'web',
             slackMessageTs,
@@ -244,7 +272,7 @@ router.post('/:id/comments', async (req, res) => {
         });
         // Record activity for comment
         try {
-            await googleSheets.addActivity({
+            await db.addActivity({
                 taskId: req.params.id,
                 user: newComment.user,
                 action: 'commented',
@@ -267,10 +295,23 @@ router.post('/:id/comments', async (req, res) => {
     }
 });
 
+// List comments for a task
+router.get('/:id/comments', async (req, res) => {
+    try {
+        const items = await db.getComments(req.params.id);
+        // newest first
+        items.sort((a, b) => (new Date(b.timestamp).getTime()||0) - (new Date(a.timestamp).getTime()||0));
+        res.json({ success: true, data: items });
+    } catch (error) {
+        console.error('Error listing comments:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Get task statistics
 router.get('/stats/summary', async (req, res) => {
     try {
-        const tasks = await googleSheets.getTasks();
+        const tasks = await db.getTasks();
         
         const stats = {
             total: tasks.length,
@@ -315,6 +356,59 @@ router.get('/stats/summary', async (req, res) => {
             success: false, 
             error: error.message 
         });
+    }
+});
+
+// Search tasks (top matches by title/description)
+router.get('/search', async (req, res) => {
+    try {
+        const q = req.query.q || '';
+        const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
+        if (!q) return res.json({ success: true, data: [] });
+        const items = await db.searchTasks(q, limit);
+        res.json({ success: true, data: items });
+    } catch (error) {
+        console.error('Error searching tasks:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Bulk: delete tasks
+router.post('/bulk/delete', async (req, res) => {
+    try {
+        const { taskIds } = req.body || {};
+        if (!Array.isArray(taskIds) || taskIds.length === 0) return res.status(400).json({ success: false, error: 'taskIds required' });
+        await db.deleteTasks(taskIds);
+        res.json({ success: true, message: 'Tasks deleted' });
+    } catch (error) {
+        console.error('Error bulk deleting tasks:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Bulk: set status
+router.post('/bulk/status', async (req, res) => {
+    try {
+        const { taskIds, status, user } = req.body || {};
+        if (!Array.isArray(taskIds) || taskIds.length === 0 || !status) return res.status(400).json({ success: false, error: 'taskIds and status required' });
+        await db.setTasksStatus(taskIds, mapStatusToEnum(status) || status, user);
+        res.json({ success: true, message: 'Tasks status updated' });
+    } catch (error) {
+        console.error('Error bulk updating status:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Bulk: assign tasks to a user (by email)
+router.post('/bulk/assign', async (req, res) => {
+    try {
+        const { taskIds, userEmail, assignedByEmail } = req.body || {};
+        if (!Array.isArray(taskIds) || taskIds.length === 0 || !userEmail) return res.status(400).json({ success: false, error: 'taskIds and userEmail required' });
+        await db.assignTasksToUser(taskIds, userEmail, assignedByEmail);
+        res.json({ success: true, message: 'Tasks assigned' });
+    } catch (error) {
+        console.error('Error bulk assigning tasks:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

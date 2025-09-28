@@ -5,7 +5,7 @@ const axios = require('axios');
 const { authenticateToken } = require('./auth');
 const { getFrontendBaseUrl } = require('../config/appConfig');
 const slackService = require('../services/slackService');
-const googleSheetsService = require('../services/googleSheets');
+const db = require('../services/dbAdapter');
 
 // Slack request verification is handled centrally in server.js via slackSecurity middleware
 
@@ -142,7 +142,7 @@ router.post('/interactive', async (req, res) => {
 async function handleTaskComplete(taskId, user, channel) {
     try {
         const slackUser = await slackService.getUserBySlackId(user.id);
-        await googleSheetsService.updateTask(taskId, {
+        await db.updateTask(taskId, {
             status: 'DONE',
             lastEditedBy: slackUser ? slackUser.name : user.name
         });
@@ -167,7 +167,7 @@ async function handleTaskAssign(taskId, user, channel) {
             });
         }
 
-        await googleSheetsService.updateTask(taskId, {
+        await db.updateTask(taskId, {
             assignedTo: slackUser.email,
             lastEditedBy: slackUser.name
         });
@@ -199,7 +199,8 @@ router.post('/notify', authenticateToken, async (req, res) => {
         
         if (taskId && !threadTs) {
             try {
-                const task = await googleSheetsService.getTask(taskId);
+                const tasks = await db.getTasks();
+                const task = tasks.find(t => t.id === taskId);
                 if (task && task.slackThreadId) {
                     targetThreadTs = task.slackThreadId;
                     targetChannel = task.slackChannelId || channel;
@@ -436,7 +437,8 @@ router.post('/task-updated', authenticateToken, async (req, res) => {
         
         if (taskId && !threadTs) {
             try {
-                const task = await googleSheetsService.getTask(taskId);
+                const tasks = await db.getTasks();
+                const task = tasks.find(t => t.id === taskId);
                 if (task && task.slackThreadId) {
                     targetThreadTs = task.slackThreadId;
                     targetChannel = task.slackChannelId || targetChannel;

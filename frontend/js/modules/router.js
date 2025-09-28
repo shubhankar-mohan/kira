@@ -40,9 +40,11 @@ class Router {
         
         // Handle task detail pages
         if (path.startsWith('/task/')) {
-            const taskId = path.split('/')[2];
-            if (taskId) {
-                this.currentTaskId = taskId;
+            const rawId = path.split('/')[2];
+            if (rawId) {
+                const isShort = /^kira-\d{1,10}$/i.test(rawId);
+                this.currentTaskId = rawId;
+                this.currentTaskIsShort = isShort;
                 return 'task-detail';
             }
         }

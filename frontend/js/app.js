@@ -151,48 +151,66 @@ class App {
     }
 
     async showTaskDetailPage(taskId) {
-        // Load the task data if not already loaded
-        if (!window.taskManager.tasks.length) {
-            await this.loadInitialData();
-        }
-        
-        // Find the task
-        const task = window.taskManager.tasks.find(t => t.id === taskId);
-        if (!task) {
-            window.uiManager.showNotification('Task not found', 'error');
+        try {
+            window.uiManager.showLoading();
+
+            let resolvedTask = window.taskManager.tasks.find(t => (t.shortId && t.shortId.toLowerCase() === taskId.toLowerCase()) || t.id === taskId);
+
+            if (!resolvedTask) {
+                // If task not in memory, fetch from API (supports shortId)
+                const response = await api.getTask(taskId);
+                if (response && response.data) {
+                    resolvedTask = response.data;
+                    const existingIndex = window.taskManager.tasks.findIndex(t => t.id === resolvedTask.id);
+                    if (existingIndex > -1) {
+                        window.taskManager.tasks[existingIndex] = resolvedTask;
+                    } else {
+                        window.taskManager.tasks.unshift(resolvedTask);
+                    }
+                }
+            } else {
+                // Always refresh to ensure comments/activity are current
+                const freshData = await window.taskManager.refreshTaskDetail(resolvedTask.id);
+                if (freshData) {
+                    resolvedTask = freshData;
+                }
+            }
+
+            if (!resolvedTask) {
+                window.uiManager.showNotification('Task not found', 'error');
+                window.router.navigateToPage('dashboard');
+                return;
+            }
+
+            const canonicalId = resolvedTask.shortId || resolvedTask.id;
+            window.router.currentTaskId = canonicalId;
+
+            window.history.pushState({ page: 'task-detail', taskId: canonicalId }, '', `/task/${canonicalId}`);
+            window.router.updateBreadcrumb(`Task ${canonicalId}`);
+
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            document.querySelectorAll('.page-section').forEach(section => section.classList.add('hidden'));
+
+            const taskDetailSection = document.getElementById('taskDetailSection');
+            if (taskDetailSection) {
+                taskDetailSection.classList.remove('hidden');
+            }
+
+            const formContainer = document.getElementById('taskDetailForm');
+            if (formContainer) {
+                formContainer.innerHTML = this.createTaskDetailFormHTML(resolvedTask);
+                this.populateTaskDetailForm(resolvedTask);
+                if (window.modalManager) {
+                    window.modalManager.loadTaskActivity(resolvedTask.id);
+                    window.modalManager.loadTaskComments(resolvedTask.id);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load task detail page:', err);
+            window.uiManager.showNotification('Unable to load task details', 'error');
             window.router.navigateToPage('dashboard');
-            return;
-        }
-
-        // Update URL
-        window.history.pushState({ page: 'task-detail', taskId }, '', `/task/${taskId}`);
-        
-        // Update breadcrumb
-        window.router.updateBreadcrumb(`Task ${taskId}`);
-        
-        // Clear navigation active state
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-        });
-
-        // Hide all page sections
-        document.querySelectorAll('.page-section').forEach(section => {
-            section.classList.add('hidden');
-        });
-
-        // Show task detail section
-        const taskDetailSection = document.getElementById('taskDetailSection');
-        if (taskDetailSection) {
-            taskDetailSection.classList.remove('hidden');
-        }
-
-        // Render the task details form in the page container
-        const formContainer = document.getElementById('taskDetailForm');
-        if (formContainer) {
-            formContainer.innerHTML = this.createTaskDetailFormHTML(task);
-            
-            // Populate the form with task data
-            this.populateTaskDetailForm(task);
+        } finally {
+            window.uiManager.hideLoading();
         }
     }
 
@@ -203,7 +221,7 @@ class App {
                     <div class="task-header-info">
                         <h3 class="task-title-large">Task Details</h3>
                         <div class="task-meta-badges">
-                            <span class="task-id-badge">${task.id || 'NEW'}</span>
+                            <span class="task-id-badge">${task.shortId || task.id || 'NEW'}</span>
                             <span class="status-badge status-${(task.status || 'not-started').toLowerCase().replace(/[^a-z]/g, '-')}">${task.status || 'Not started'}</span>
                         </div>
                     </div>
@@ -401,6 +419,18 @@ class App {
         if (task.sprintWeek) {
             document.getElementById('pageTaskSprint').value = task.sprintWeek;
         }
+
+        if (taskAssignee) {
+            const assigneeSelect = document.getElementById('pageTaskAssignee');
+            if (assigneeSelect) {
+                assigneeSelect.value = task.assignedTo || '';
+            }
+        }
+
+        const idDisplay = document.querySelector('.task-id-badge');
+        if (idDisplay) {
+            idDisplay.textContent = task.shortId || task.id || 'NEW';
+        }
     }
 
     populatePageTaskDropdowns() {
@@ -500,34 +530,6 @@ class App {
 }
 
 // Global functions
-function fillDemoCredentials(email, password) {
-    window.uiManager.fillDemoCredentials(email, password);
-}
-
-function navigateTo(page) {
-    if (window.router) {
-        window.router.navigateToPage(page);
-    }
-}
-
-function showCreateTaskModal() {
-    if (window.modalManager) {
-        window.modalManager.showCreateTaskModal();
-    }
-}
-
-function showCreateSprintModal() {
-    if (window.modalManager) {
-        window.modalManager.showModal('createSprintModal');
-    }
-}
-
-function showCreateUserModal() {
-    if (window.modalManager) {
-        window.modalManager.showModal('createUserModal');
-    }
-}
-
 function openTaskDetails(taskId) {
     if (window.modalManager) {
         window.modalManager.openTaskDetails(taskId);

@@ -131,13 +131,33 @@ class EventHandlerManager {
     // Task action handlers
     setupTaskActionHandlers() {
         // Task action buttons (View, Edit, etc.)
-        document.addEventListener('click', (e) => {
-            const actionBtn = e.target.closest('[data-action]');
+        document.addEventListener('click', (event) => {
+            const actionBtn = event.target.closest('[data-action]');
             if (!actionBtn) return;
 
             const action = actionBtn.dataset.action;
             const taskId = actionBtn.dataset.taskId;
             const page = actionBtn.dataset.page;
+
+            const modalManagedActions = new Set([
+                'showCreateTaskModal',
+                'showCreateUserModal',
+                'showCreateSprintModal',
+                'createTask',
+                'createUser',
+                'createSprint',
+                'saveTaskDetails',
+                'saveTaskDetailsFromPage',
+                'addComment',
+                'clearComment',
+                'closeTaskModal',
+                'toggleCurrentSprint',
+                'toggleCurrentSprintFilter'
+            ]);
+
+            if (modalManagedActions.has(action)) {
+                return; // Let ModalManager handle these actions to avoid duplicates
+            }
 
             console.log('Action button clicked:', { action, taskId, page });
 
@@ -163,27 +183,6 @@ class EventHandlerManager {
                 case 'navigateTo':
                     if (page) this.navigateTo(page);
                     break;
-                case 'saveTaskDetails':
-                    this.saveTaskDetails();
-                    break;
-                case 'createTask':
-                    this.createTask();
-                    break;
-                case 'createSprint':
-                    this.createSprint();
-                    break;
-                case 'createUser':
-                    this.createUser();
-                    break;
-                case 'showCreateTaskModal':
-                    this.showCreateTaskModal();
-                    break;
-                case 'showCreateSprintModal':
-                    this.showCreateSprintModal();
-                    break;
-                case 'showCreateUserModal':
-                    this.showCreateUserModal();
-                    break;
                 case 'syncData':
                     this.syncData();
                     break;
@@ -197,11 +196,6 @@ class EventHandlerManager {
                     const modalId = actionBtn.dataset.modalId;
                     if (modalId && window.modalManager) {
                         window.modalManager.closeModal(modalId);
-                    }
-                    break;
-                case 'closeTaskModal':
-                    if (window.modalManager) {
-                        window.modalManager.closeTaskModal();
                     }
                     break;
                 case 'openUserProfile':
@@ -305,7 +299,9 @@ class EventHandlerManager {
 
     // Sprint functions
     createSprint() {
-        if (window.uiManager) {
+        if (window.modalManager && typeof window.modalManager.createSprint === 'function') {
+            window.modalManager.createSprint();
+        } else if (window.uiManager && typeof window.uiManager.createSprint === 'function') {
             window.uiManager.createSprint();
         } else if (window.createSprint) {
             window.createSprint();

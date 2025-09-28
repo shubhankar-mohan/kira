@@ -114,15 +114,6 @@ class TaskManager {
     }
 
     setupFormSubmissions() {
-        // Create task form
-        const createTaskForm = document.getElementById('createTaskForm');
-        if (createTaskForm) {
-            createTaskForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.createTask();
-            });
-        }
-
         // Create sprint form
         const createSprintForm = document.getElementById('createSprintForm');
         if (createSprintForm) {

@@ -1,0 +1,311 @@
+// Prisma schema for Kira Task Manager (MySQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Admin
+  Manager
+  Developer
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  PRODUCT_BLOCKED
+  ENGG_BLOCKED
+  DEV_TESTING
+  NOT_REQUIRED
+}
+
+enum TaskPriority {
+  P0
+  P1
+  P2
+  BACKLOG
+}
+
+enum TaskType {
+  Feature
+  Bug
+  Improvement
+  Task
+}
+
+enum AssignRole {
+  Assignee
+  Reviewer
+  Watcher
+}
+
+enum CommentType {
+  Comment
+  Status_Change
+  Assignment
+  System
+}
+
+enum Source {
+  Web
+  Slack
+  System
+}
+
+enum AggregateType {
+  Task
+  Comment
+  User
+  Sprint
+}
+
+enum EntityType {
+  Task
+  Sprint
+  User
+  Comment
+}
+
+enum SprintStatus {
+  Planned
+  Active
+  Completed
+}
+
+enum CreatedFrom {
+  Web
+  Slack
+  API
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Char(36)
+  email        String   @unique @db.VarChar(255)
+  name         String   @db.VarChar(255)
+  passwordHash String?  @db.VarChar(255)
+  role         Role     @default(Developer)
+  avatarUrl    String?  @db.VarChar(500)
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdSprints Sprint[] @relation("SprintCreatedBy")
+  createdTasks   Task[]   @relation("TaskCreatedBy")
+  updatedTasks   Task[]   @relation("TaskUpdatedBy")
+  assignments    TaskAssignment[] @relation("TaskAssignmentUser")
+  assignedBy     TaskAssignment[] @relation("TaskAssignmentAssignedBy")
+  comments       Comment[]
+  slackThreads   SlackThread[] @relation("SlackThreadCreatedBy")
+  events         Event[]
+  activityLogs   ActivityLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model Sprint {
+  id         String      @id @default(uuid()) @db.Char(36)
+  name       String      @db.VarChar(255)
+  week       Int
+  startDate  DateTime?
+  endDate    DateTime?
+  status     SprintStatus @default(Planned)
+  description String?
+  goal       String?
+  isCurrent  Boolean     @default(false)
+  createdById String?
+  createdBy  User?       @relation("SprintCreatedBy", fields: [createdById], references: [id])
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  tasks      Task[]
+
+  @@index([week])
+  @@index([status])
+  @@index([isCurrent])
+  @@index([startDate, endDate])
+}
+
+model Task {
+  id              String       @id @default(uuid()) @db.Char(36)
+  displayId       Int?         @unique
+  title           String       @db.VarChar(500)
+  description     String?      @db.Text
+  status          TaskStatus   @default(PENDING)
+  priority        TaskPriority @default(BACKLOG)
+  type            TaskType     @default(Task)
+  storyPoints     Int          @default(0)
+  estimatedPoints Int          @default(0)
+  orderIndex      Int          @default(0)
+  tags            Json?
+  metadata        Json?
+
+  sprintId     String?      @db.Char(36)
+  sprint       Sprint?      @relation(fields: [sprintId], references: [id])
+  parentTaskId String?      @db.Char(36)
+  parentTask   Task?        @relation("Subtasks", fields: [parentTaskId], references: [id])
+  subtasks     Task[]       @relation("Subtasks")
+
+  // Slack integration
+  slackThreadTs  String?      @db.VarChar(50)
+  slackChannelId String?      @db.VarChar(50)
+  createdFrom    CreatedFrom  @default(Web)
+
+  // Audit
+  createdById  String?      @db.Char(36)
+  createdBy    User?        @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  updatedById  String?      @db.Char(36)
+  updatedBy    User?        @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
+  completedAt  DateTime?
+  dueDate      DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  assignments  TaskAssignment[]
+  comments     Comment[]
+  slackThreads SlackThread[]
+  events       Event[]
+  activityLogs ActivityLog[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([type])
+  @@index([sprintId])
+  @@index([parentTaskId])
+  @@index([createdAt])
+  @@index([dueDate])
+  @@index([orderIndex])
+  @@index([slackThreadTs])
+  @@index([slackChannelId])
+  @@index([createdById])
+  @@index([updatedById])
+  @@index([title])
+}
+
+// Sequence table to generate incremental task display IDs
+model TaskSequence {
+  id Int @id @default(autoincrement())
+}
+
+model TaskAssignment {
+  taskId     String
+  userId     String
+  role       AssignRole @default(Assignee)
+  assignedById String?
+  assignedBy User?      @relation("TaskAssignmentAssignedBy", fields: [assignedById], references: [id])
+  assignedAt DateTime   @default(now())
+
+  task Task @relation(fields: [taskId], references: [id])
+  user User @relation("TaskAssignmentUser", fields: [userId], references: [id])
+
+  @@id([taskId, userId, role])
+  @@index([userId])
+  @@index([role])
+}
+
+model Comment {
+  id              String       @id @default(uuid()) @db.Char(36)
+  taskId          String
+  userId          String?
+  content         String
+  commentType     CommentType  @default(Comment)
+  metadata        Json?
+  parentCommentId String?
+  isEdited        Boolean      @default(false)
+
+  // Slack integration
+  slackTs         String?      @db.VarChar(50)
+  slackChannelId  String?      @db.VarChar(50)
+  source          Source       @default(Web)
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+  parentComment Comment? @relation("ThreadedComments", fields: [parentCommentId], references: [id])
+  replies       Comment[] @relation("ThreadedComments")
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([commentType])
+  @@index([slackTs])
+  @@index([source])
+}
+
+model SlackThread {
+  id          String   @id @default(uuid()) @db.Char(36)
+  taskId      String
+  channelId   String   @db.VarChar(50)
+  threadTs    String   @db.VarChar(50)
+  createdById String?
+  createdBy   User?    @relation("SlackThreadCreatedBy", fields: [createdById], references: [id])
+  isActive    Boolean  @default(true)
+  lastActivityAt DateTime @default(now())
+  messageCount Int     @default(0)
+
+  task Task @relation(fields: [taskId], references: [id])
+
+  @@unique([channelId, threadTs])
+  @@index([taskId])
+  @@index([channelId])
+  @@index([isActive])
+}
+
+model Event {
+  id            String        @id @default(uuid()) @db.Char(36)
+  aggregateType AggregateType
+  aggregateId   String
+  eventType     String        @db.VarChar(100)
+  eventData     Json
+  source        Source
+  userId        String?
+  slackEventId  String?       @db.VarChar(100) @unique
+  slackThreadTs String?       @db.VarChar(50)
+  createdAt     DateTime      @default(now())
+  processedAt   DateTime?
+
+  user User? @relation(fields: [userId], references: [id])
+  task Task? @relation(fields: [aggregateId], references: [id])
+
+  @@index([aggregateType, aggregateId])
+  @@index([createdAt])
+  @@index([source])
+  @@index([processedAt])
+}
+
+model ActivityLog {
+  id            String     @id @default(uuid()) @db.Char(36)
+  entityType    EntityType
+  entityId      String
+  userId        String?
+  action        String     @db.VarChar(100)
+  oldValues     Json?
+  newValues     Json?
+  source        Source
+  slackThreadTs String?    @db.VarChar(50)
+  ipAddress     String?    @db.VarChar(45)
+  userAgent     String?
+  createdAt     DateTime   @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+  task Task? @relation(fields: [entityId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([action])
+  @@index([source])
+  @@index([createdAt])
+}
+
+

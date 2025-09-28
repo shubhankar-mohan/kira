@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const googleSheets = require('../services/googleSheets');
+const db = require('../services/dbAdapter');
 
 // Get all users
 router.get('/', async (req, res) => {
     try {
-        const users = await googleSheets.getUsers();
+        const users = await db.getUsers();
         
         // Remove password hashes from response
         const safeUsers = users.map(user => ({
@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
 // Get single user by ID
 router.get('/:id', async (req, res) => {
     try {
-        const users = await googleSheets.getUsers();
+        const users = await db.getUsers();
         const user = users.find(u => u.id === req.params.id);
         
         if (!user) {
@@ -84,7 +84,7 @@ router.post('/', async (req, res) => {
         }
 
         // Check if user already exists
-        const existingUsers = await googleSheets.getUsers();
+        const existingUsers = await db.getUsers();
         if (existingUsers.find(u => u.email === userData.email)) {
             return res.status(409).json({ 
                 success: false, 
@@ -92,7 +92,7 @@ router.post('/', async (req, res) => {
             });
         }
 
-        const newUser = await googleSheets.createUser(userData);
+        const newUser = await db.createUser(userData);
         
         // Remove password hash from response
         const safeUser = {
@@ -119,7 +119,7 @@ router.post('/', async (req, res) => {
 // Get user tasks and statistics
 router.get('/:id/tasks', async (req, res) => {
     try {
-        const users = await googleSheets.getUsers();
+        const users = await db.getUsers();
         const user = users.find(u => u.id === req.params.id);
         
         if (!user) {
@@ -184,7 +184,7 @@ router.put('/:id', async (req, res) => {
 
         // Update user data
         const updatedUser = { ...users[userIndex], ...updateData };
-        const result = await googleSheets.updateUser(userId, updatedUser);
+        const result = await db.updateUser(userId, updatedUser);
         
         // Remove password hash from response
         const safeUser = {
@@ -216,7 +216,7 @@ router.delete('/:id', async (req, res) => {
     try {
         const userId = req.params.id;
 
-        const users = await googleSheets.getUsers();
+        const users = await db.getUsers();
         const user = users.find(u => u.id === userId || u.email === userId);
         
         if (!user) {
@@ -226,7 +226,7 @@ router.delete('/:id', async (req, res) => {
             });
         }
 
-        await googleSheets.deleteUser(userId);
+        await db.deleteUser(userId);
         
         res.json({
             success: true,

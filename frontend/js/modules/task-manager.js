@@ -11,15 +11,52 @@ class TaskManager {
             priority: '',
             type: ''
         };
+        this.pagination = {
+            page: 1,
+            pageSize: 20,
+            total: 0,
+            hasNext: false,
+            hasPrev: false
+        };
+        this.serverFilters = {
+            status: [],
+            priority: [],
+            type: [],
+            sprint: [],
+            assignee: [],
+            assignedBy: [],
+            search: '',
+            createdFrom: '',
+            createdBefore: '',
+            sort: '',
+            dir: ''
+        };
+        this.bulkSelection = new Set();
     }
 
-    async loadTasks() {
+    async loadTasks(params = {}) {
         try {
-            const response = await api.getTasks();
-            this.tasks = response.data || [];
+            const query = this.buildTaskQueryPayload(params);
+            const response = await api.getTasks(query);
+            const items = response.data || [];
+
+            this.tasks = items;
+            this.updatePagination({
+                page: response.page,
+                pageSize: response.pageSize,
+                total: response.total,
+                hasNext: response.hasNext
+            });
+
+            this.serverFilters = this.normalizeServerFilters({ ...this.serverFilters, ...params });
+
+            if (window.taskBoardManager && typeof window.taskBoardManager.onTasksLoaded === 'function') {
+                window.taskBoardManager.onTasksLoaded(this.tasks, this.pagination);
+            }
         } catch (error) {
             console.error('Error loading tasks:', error);
             this.tasks = [];
+            this.updatePagination({ total: 0, hasNext: false, hasPrev: false, page: 1 });
         }
     }
 
@@ -116,6 +153,8 @@ class TaskManager {
                 break;
             case 'board':
                 if (window.taskBoardManager) {
+                    this.clearBulkSelection();
+                    await this.loadTasks();
                     window.taskBoardManager.renderTasks(this.tasks);
                     window.taskBoardManager.populateFilters();
                 }
@@ -153,8 +192,7 @@ class TaskManager {
         try {
             const response = await api.createTask(taskData);
             if (response.success) {
-                this.tasks.push(response.data);
-                this.updateDashboard();
+                await this.loadTasks({ page: 1 });
                 if (window.taskBoardManager) {
                     window.taskBoardManager.renderTasks(this.tasks);
                     window.taskBoardManager.populateFilters();
@@ -539,11 +577,6 @@ class TaskManager {
         console.log('Creating sprint...');
     }
 
-    async createUser() {
-        // Implementation for creating users
-        console.log('Creating user...');
-    }
-
     showNotification(message, type) {
         if (window.uiManager) {
             window.uiManager.showNotification(message, type);
@@ -572,6 +605,194 @@ class TaskManager {
         // Mock Slack notification - in real app, this would send to Slack
         console.log('Slack notification for task update:', taskId, taskData);
         return Promise.resolve({ success: true });
+    }
+
+    buildTaskQueryPayload(overrides = {}) {
+        const {
+            page = this.pagination.page,
+            pageSize = this.pagination.pageSize,
+            status,
+            priority,
+            type,
+            sprint,
+            assignee,
+            assignedBy,
+            search,
+            createdFrom,
+            createdBefore,
+            sort,
+            dir
+        } = { ...this.serverFilters, ...overrides };
+
+        const payload = {
+            page,
+            pageSize,
+            search,
+            createdFrom,
+            createdBefore,
+            sort,
+            dir,
+            status,
+            priority,
+            type,
+            sprint,
+            assignee,
+            assignedBy
+        };
+
+        Object.keys(payload).forEach((key) => {
+            const value = payload[key];
+            if (Array.isArray(value)) {
+                const cleaned = value.filter((entry) => entry !== undefined && entry !== null && entry !== '' && entry !== 'all');
+                if (cleaned.length === 0) {
+                    delete payload[key];
+                } else {
+                    payload[key] = cleaned;
+                }
+            } else if (value === undefined || value === null || value === '' || value === 'all') {
+                delete payload[key];
+            }
+        });
+
+        return payload;
+    }
+
+    normalizeServerFilters(filters = {}) {
+        const normalized = { ...this.serverFilters, ...filters };
+        Object.keys(normalized).forEach((key) => {
+            const value = normalized[key];
+            if (Array.isArray(value)) {
+                normalized[key] = value.filter((entry) => entry !== undefined && entry !== null && entry !== '' && entry !== 'all');
+            } else if (value === undefined || value === null) {
+                normalized[key] = '';
+            }
+        });
+        return normalized;
+    }
+
+    updatePagination(meta = {}) {
+        const page = Number(meta.page || this.pagination.page || 1);
+        const pageSize = Number(meta.pageSize || this.pagination.pageSize || 20);
+        const total = Number(meta.total || this.pagination.total || 0);
+        const hasNext = Boolean(meta.hasNext);
+        const hasPrev = Boolean(meta.hasPrev || page > 1);
+
+        this.pagination = {
+            page,
+            pageSize,
+            total,
+            hasNext,
+            hasPrev
+        };
+    }
+
+    clearBulkSelection() {
+        this.bulkSelection.clear();
+        if (window.taskBoardManager && typeof window.taskBoardManager.updateBulkSelectionState === 'function') {
+            window.taskBoardManager.updateBulkSelectionState([]);
+        }
+    }
+
+    async updateFiltersAndReload(updates = {}, options = {}) {
+        this.serverFilters = this.normalizeServerFilters({ ...this.serverFilters, ...updates });
+
+        if (options.resetPage) {
+            this.pagination.page = 1;
+        }
+
+        const queryOverrides = {
+            page: this.pagination.page,
+            pageSize: this.pagination.pageSize,
+            ...updates
+        };
+
+        await this.loadTasks(queryOverrides);
+    }
+
+    async goToNextPage() {
+        if (!this.pagination.hasNext) return;
+        const nextPage = this.pagination.page + 1;
+        await this.loadTasks({ page: nextPage });
+    }
+
+    async goToPrevPage() {
+        if (!this.pagination.hasPrev) return;
+        const prevPage = Math.max(1, this.pagination.page - 1);
+        await this.loadTasks({ page: prevPage });
+    }
+
+    async changePageSize(newSize) {
+        const size = Number(newSize);
+        if (!size || size === this.pagination.pageSize) return;
+        this.pagination.pageSize = size;
+        this.pagination.page = 1;
+        await this.loadTasks({ page: 1, pageSize: size });
+    }
+
+    async bulkUpdateStatus(taskIds, status) {
+        if (!Array.isArray(taskIds) || taskIds.length === 0) return;
+        try {
+            await api.bulkUpdateStatus(taskIds, status, window.authManager?.currentUser?.email || '');
+            await this.loadTasks();
+            if (window.uiManager) {
+                window.uiManager.showNotification('Status updated for selected tasks', 'success');
+            }
+        } catch (error) {
+            console.error('Error updating task status in bulk:', error);
+            if (window.uiManager) {
+                window.uiManager.showNotification('Bulk status update failed', 'error');
+            }
+        }
+    }
+
+    async bulkAssignTasks(taskIds, userEmail, assignedByEmail) {
+        if (!Array.isArray(taskIds) || taskIds.length === 0 || !userEmail) return;
+        try {
+            await api.bulkAssignTasks(taskIds, userEmail, assignedByEmail);
+            await this.loadTasks();
+            if (window.uiManager) {
+                window.uiManager.showNotification('Assignee updated for selected tasks', 'success');
+            }
+        } catch (error) {
+            console.error('Error assigning tasks in bulk:', error);
+            if (window.uiManager) {
+                window.uiManager.showNotification('Bulk assign failed', 'error');
+            }
+        }
+    }
+
+    async bulkDeleteTasks(taskIds) {
+        if (!Array.isArray(taskIds) || taskIds.length === 0) return;
+        try {
+            await api.bulkDeleteTasks(taskIds);
+            await this.loadTasks();
+            if (window.uiManager) {
+                window.uiManager.showNotification('Selected tasks deleted', 'success');
+            }
+        } catch (error) {
+            console.error('Error deleting tasks in bulk:', error);
+            if (window.uiManager) {
+                window.uiManager.showNotification('Bulk delete failed', 'error');
+            }
+        }
+    }
+
+    async refreshTaskDetail(taskId) {
+        try {
+            const response = await api.getTask(taskId);
+            if (response && response.data) {
+                const index = this.tasks.findIndex((task) => task.id === response.data.id);
+                if (index !== -1) {
+                    this.tasks[index] = response.data;
+                } else {
+                    this.tasks.unshift(response.data);
+                }
+                return response.data;
+            }
+        } catch (error) {
+            console.error('Failed to refresh task detail:', error);
+        }
+        return null;
     }
 }
 

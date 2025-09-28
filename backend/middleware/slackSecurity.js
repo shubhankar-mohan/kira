@@ -71,14 +71,19 @@ function verifySignature(signature, timestamp, body) {
     }
 }
 
-// Rate limiting for Slack endpoints
+// Rate limiting for Slack endpoints (env-driven)
+const WINDOW_MS = parseInt(process.env.SLACK_RATE_LIMIT_WINDOW_MS || '', 10);
+const MAX_REQ = parseInt(process.env.SLACK_RATE_LIMIT_MAX || '', 10);
+const windowMs = Number.isFinite(WINDOW_MS) && WINDOW_MS > 0 ? WINDOW_MS : 60 * 1000;
+const max = Number.isFinite(MAX_REQ) && MAX_REQ > 0 ? MAX_REQ : 60;
+
 const slackRateLimit = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 minute
-    max: 60, // limit each IP to 60 requests per windowMs
+    windowMs,
+    max,
     message: {
         error: 'Too many requests from this IP',
         code: 'RATE_LIMIT_EXCEEDED',
-        retryAfter: '60 seconds'
+        retryAfter: `${Math.round(windowMs / 1000)} seconds`
     },
     standardHeaders: true,
     legacyHeaders: false,
@@ -90,7 +95,7 @@ const slackRateLimit = rateLimit({
         res.status(429).json({
             error: 'Too many requests from this IP',
             code: 'RATE_LIMIT_EXCEEDED',
-            retryAfter: '60 seconds'
+            retryAfter: `${Math.round(windowMs / 1000)} seconds`
         });
     }
 });

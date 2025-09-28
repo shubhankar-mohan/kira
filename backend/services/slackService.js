@@ -2,7 +2,7 @@ const { App } = require('@slack/bolt');
 const { WebClient } = require('@slack/web-api');
 const crypto = require('crypto');
 const cron = require('node-cron');
-const googleSheetsService = require('./googleSheets');
+const db = require('./dbAdapter');
 const { getFrontendBaseUrl } = require('../config/appConfig');
 const ScrumMasterFeatures = require('./scrumMasterFeatures');
 
@@ -193,7 +193,7 @@ class SlackService {
             // Only consider when reaction is in a thread we know or can resolve
             let taskId = this.threadToTaskMap.get(threadTs);
             if (!taskId) {
-                const tasks = await googleSheetsService.getTasks();
+                const tasks = await db.getTasks();
                 const linked = tasks.find(t => String(t.slackThreadId) === String(threadTs));
                 if (linked) {
                     taskId = linked.id;
@@ -206,7 +206,7 @@ class SlackService {
             // Example behavior: if ✅ added, mark task done
             if (reaction === 'white_check_mark' || reaction === 'heavy_check_mark') {
                 const user = await this.getUserBySlackId(event.user);
-                await googleSheetsService.updateTask(taskId, {
+                await db.updateTask(taskId, {
                     status: 'DONE',
                     lastEditedBy: user ? user.name : 'Slack User'
                 });
@@ -249,7 +249,7 @@ class SlackService {
                 }
                 // Fallback: check Sheets for existing mapping
                 try {
-                    const tasks = await googleSheetsService.getTasks();
+                    const tasks = await db.getTasks();
                     const existing = tasks.find(t => String(t.slackThreadId) === String(event.thread_ts));
                     if (existing) {
                         this.threadToTaskMap.set(event.thread_ts, existing.id);
@@ -280,7 +280,7 @@ class SlackService {
             const taskInfo = this.parseTaskFromMention(event.text);
             
             if (taskInfo) {
-                // Create task in Google Sheets
+                // Create task in DB/Sheets via adapter
                 const user = await this.getUserBySlackId(userId);
                 const task = await this.createTaskFromSlack(taskInfo, user, ts, channel);
                 
@@ -386,7 +386,7 @@ class SlackService {
 
     async createTaskFromSlack(taskInfo, createdBy, threadTs, channelId) {
         // Get current active sprint
-        const sprints = await googleSheetsService.getSprints();
+        const sprints = await db.getSprints();
         const activeSprint = sprints.find(s => s.status === 'Active') || sprints[0];
         
         // Convert Slack user IDs to emails
@@ -412,17 +412,17 @@ class SlackService {
             slackChannelId: channelId
         };
 
-        const task = await googleSheetsService.createTask(taskData);
+        const task = await db.createTask(taskData);
         
         // Add initial comment with Slack context
-        await googleSheetsService.addComment({
+        await db.addComment({
             taskId: task.id,
             user: createdBy ? createdBy.name : 'Slack User',
             comment: `Task created from Slack mention in thread ${threadTs}`
         });
         // Log activity
         try {
-            await googleSheetsService.addActivity({
+            await db.addActivity({
                 taskId: task.id,
                 user: createdBy ? createdBy.name : 'Slack User',
                 action: 'created',
@@ -501,10 +501,10 @@ class SlackService {
             const mappedTaskId = this.threadToTaskMap.get(event.thread_ts);
             let resolvedTaskId = mappedTaskId;
 
-            // Fallback: lookup task by slackThreadId in Sheets if not in memory
+            // Fallback: lookup task by slackThreadId in DB if not in memory
             if (!resolvedTaskId) {
                 try {
-                    const tasks = await googleSheetsService.getTasks();
+                    const tasks = await db.getTasks();
                     const linkedTask = tasks.find(t => String(t.slackThreadId) === String(event.thread_ts));
                     if (linkedTask) {
                         resolvedTaskId = linkedTask.id;
@@ -521,7 +521,7 @@ class SlackService {
             const userName = user ? user.name : 'Slack User';
 
             // Add comment to task with Slack metadata
-            await googleSheetsService.addComment({
+            await db.addComment({
                 taskId: resolvedTaskId,
                 user: userName,
                 comment: event.text,
@@ -546,6 +546,10 @@ class SlackService {
     // Post a task created message and return { channel, thread_ts }
     async postTaskCreatedThread(task) {
         try {
+            if (!this.client) {
+                console.warn('Slack client not initialized; skipping task thread post');
+                return { channel: null, thread_ts: null };
+            }
             const channel = process.env.SLACK_TASKS_CHANNEL || process.env.SLACK_NOTIFICATIONS_CHANNEL || '#eng-sprint';
             const result = await this.client.chat.postMessage({
                 channel: channel,
@@ -651,7 +655,7 @@ class SlackService {
 
         try {
             const user = await this.getUserBySlackId(userId);
-            const task = await googleSheetsService.createTask({
+            const task = await db.createTask({
                 task: title,
                 status: 'Not started',
                 priority: 'P2',
@@ -660,7 +664,7 @@ class SlackService {
             });
 
             respond({
-                text: `✅ Task created: *${task.task}* (ID: ${task.id})`,
+                text: `✅ Task created: *${task.task}* (ID: ${task.shortId || task.id})`,
                 response_type: 'in_channel'
             });
 
@@ -683,7 +687,7 @@ class SlackService {
 
         try {
             const user = await this.getUserBySlackId(userId);
-            await googleSheetsService.updateTask(taskId, {
+            await db.updateTask(taskId, {
                 status: 'DONE',
                 lastEditedBy: user ? user.name : 'Slack User'
             });
@@ -733,7 +737,7 @@ class SlackService {
             }
             
             const currentUser = await this.getUserBySlackId(userId);
-            await googleSheetsService.updateTask(taskId, {
+            await db.updateTask(taskId, {
                 assignedTo: targetUser.email,
                 lastEditedBy: currentUser ? currentUser.name : 'Slack User'
             });
@@ -753,8 +757,8 @@ class SlackService {
 
     async handleStatusCommand(args, respond) {
         try {
-            const tasks = await googleSheetsService.getTasks();
-            const sprints = await googleSheetsService.getSprints();
+            const tasks = await db.getTasks();
+            const sprints = await db.getSprints();
             
             const activeSprint = sprints.find(s => s.status === 'Active');
             if (!activeSprint) {
@@ -794,7 +798,7 @@ class SlackService {
             if (!query) {
                 return respond({ text: 'Usage: /kira find <text>', response_type: 'ephemeral' });
             }
-            const tasks = await googleSheetsService.getTasks();
+            const tasks = await db.getTasks();
             const results = tasks.filter(t =>
                 (t.task || '').toLowerCase().includes(query) ||
                 (t.description || '').toLowerCase().includes(query)
@@ -811,7 +815,7 @@ class SlackService {
         try {
             const user = await this.getUserBySlackId(userId);
             if (!user || !user.email) return respond({ text: 'User not mapped to email.', response_type: 'ephemeral' });
-            const tasks = await googleSheetsService.getTasks();
+            const tasks = await db.getTasks();
             const mine = tasks.filter(t => (t.assignedTo || '').includes(user.email)).slice(0, 10);
             if (mine.length === 0) return respond({ text: 'No assigned tasks.', response_type: 'ephemeral' });
             const lines = mine.map(t => `• ${t.id}: ${t.task} [${t.status}]`).join('\n');
@@ -835,15 +839,15 @@ class SlackService {
             const reason = args.slice(1).join(' ') || 'No reason provided';
             if (!taskId) return respond({ text: 'Usage: /kira block <TASK_ID> <reason>', response_type: 'ephemeral' });
             const user = await this.getUserBySlackId(userId);
-            await googleSheetsService.updateTask(taskId, { status: 'Blocked - Engineering', lastEditedBy: user ? user.name : 'Slack User' });
-            await googleSheetsService.addActivity({ taskId, user: user ? user.name : 'Slack User', action: 'blocked', details: reason, source: 'slack' });
+            await db.updateTask(taskId, { status: 'Blocked - Engineering', lastEditedBy: user ? user.name : 'Slack User' });
+            await db.addActivity({ taskId, user: user ? user.name : 'Slack User', action: 'blocked', details: reason, source: 'slack' });
             respond({ text: `🚫 Task ${taskId} marked blocked: ${reason}`, response_type: 'in_channel' });
         } catch (e) { respond({ text: 'Error blocking task.', response_type: 'ephemeral' }); }
     }
 
     async handleSprintCommand(args, respond) {
         try {
-            const sprints = await googleSheetsService.getSprints();
+            const sprints = await db.getSprints();
             
             if (sprints.length === 0) {
                 return respond({
@@ -1061,7 +1065,7 @@ class SlackService {
 
     async getActiveSprintName() {
         try {
-            const sprints = await googleSheetsService.getSprints();
+            const sprints = await db.getSprints();
             const activeSprint = sprints.find(s => s.status === 'Active');
             return activeSprint ? activeSprint.name : null;
         } catch (error) {

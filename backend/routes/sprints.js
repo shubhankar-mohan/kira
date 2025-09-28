@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const googleSheets = require('../services/googleSheets');
+const db = require('../services/dbAdapter');
 
 // Get all sprints
 router.get('/', async (req, res) => {
     try {
-        const sprints = await googleSheets.getSprints();
+        const sprints = await db.getSprints();
         
         // Add task statistics for each sprint
-        const tasks = await googleSheets.getTasks();
+        const tasks = await require('../services/dbAdapter').getTasks();
         const sprintsWithStats = sprints.map(sprint => {
             const sprintTasks = tasks.filter(task => 
                 task.sprintWeek === sprint.name && task.year === sprint.year
@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
 // Get single sprint by ID
 router.get('/:id', async (req, res) => {
     try {
-        const sprints = await googleSheets.getSprints();
+        const sprints = await db.getSprints();
         const sprint = sprints.find(s => s.id === req.params.id);
         
         if (!sprint) {
@@ -58,7 +58,7 @@ router.get('/:id', async (req, res) => {
         }
 
         // Get tasks for this sprint
-        const tasks = await googleSheets.getTasks();
+        const tasks = await require('../services/dbAdapter').getTasks();
         const sprintTasks = tasks.filter(task => 
             task.sprintWeek === sprint.name && task.year === sprint.year
         );
@@ -109,7 +109,7 @@ router.post('/', async (req, res) => {
         }
 
         // Check if sprint already exists
-        const existingSprints = await googleSheets.getSprints();
+        const existingSprints = await db.getSprints();
         if (existingSprints.find(s => s.name === sprintData.name && s.year === sprintData.year)) {
             return res.status(409).json({ 
                 success: false, 
@@ -117,7 +117,7 @@ router.post('/', async (req, res) => {
             });
         }
 
-        const newSprint = await googleSheets.createSprint(sprintData);
+        const newSprint = await db.createSprint(sprintData);
         
         res.status(201).json({
             success: true,
@@ -136,7 +136,7 @@ router.post('/', async (req, res) => {
 // Get sprint burndown chart data
 router.get('/:id/burndown', async (req, res) => {
     try {
-        const sprints = await googleSheets.getSprints();
+        const sprints = await db.getSprints();
         const sprint = sprints.find(s => s.id === req.params.id);
         
         if (!sprint) {
@@ -146,7 +146,7 @@ router.get('/:id/burndown', async (req, res) => {
             });
         }
 
-        const tasks = await googleSheets.getTasks();
+        const tasks = await require('../services/dbAdapter').getTasks();
         const sprintTasks = tasks.filter(task => 
             task.sprintWeek === sprint.name && task.year === sprint.year
         );
@@ -185,7 +185,7 @@ router.get('/:id/burndown', async (req, res) => {
 // Get active sprint
 router.get('/active/current', async (req, res) => {
     try {
-        const sprints = await googleSheets.getSprints();
+        const sprints = await db.getSprints();
         const activeSprint = sprints.find(s => s.status === 'Active');
         
         if (!activeSprint) {
@@ -197,7 +197,7 @@ router.get('/active/current', async (req, res) => {
         }
 
         // Get tasks for active sprint
-        const tasks = await googleSheets.getTasks();
+        const tasks = await require('../services/dbAdapter').getTasks();
         const sprintTasks = tasks.filter(task => 
             task.sprintWeek === activeSprint.name && task.year === activeSprint.year
         );
@@ -238,7 +238,7 @@ router.put('/:id', async (req, res) => {
         
         console.log(`🔄 Updating sprint ${sprintId} with data:`, updateData);
 
-        const sprints = await googleSheets.getSprints();
+        const sprints = await db.getSprints();
         const sprintIndex = sprints.findIndex(s => s.id === sprintId || s.sprintWeek === sprintId);
         
         if (sprintIndex === -1) {
@@ -250,7 +250,7 @@ router.put('/:id', async (req, res) => {
 
         // Update sprint data  
         const updatedSprint = { ...sprints[sprintIndex], ...updateData };
-        const result = await googleSheets.updateSprint(sprintId, updatedSprint);
+        const result = await db.updateSprint(sprintId, updatedSprint);
         
         res.json({
             success: true,

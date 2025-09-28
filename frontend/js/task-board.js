@@ -26,7 +26,27 @@ class TaskBoardManager {
             priority: [],
             currentSprintOnly: false
         };
+        this.pagination = {
+            page: 1,
+            pageSize: 20,
+            total: 0,
+            hasNext: false,
+            hasPrev: false
+        };
+        this.bulkSelection = new Set();
+        this.pageSizeOptions = [10, 20, 50, 100];
         this.init();
+    }
+
+    onTasksLoaded(tasks = [], pagination = {}) {
+        this.allTasks = tasks;
+        this.pagination = {
+            ...this.pagination,
+            ...pagination
+        };
+        this.applyFilters({ skipServer: true });
+        this.updatePaginationControls();
+        this.updateBulkSelectionState();
     }
 
     init() {
@@ -402,6 +422,81 @@ class TaskBoardManager {
             const column = this.createColumn(status);
             this.boardContainer.appendChild(column);
         });
+
+        this.boardContainer.appendChild(this.createPaginationFooter());
+    }
+
+    createPaginationFooter() {
+        const footer = document.createElement('div');
+        footer.className = 'board-pagination';
+
+        const pageSizeOptions = this.pageSizeOptions.map((size) => `
+            <option value="${size}">${size} / page</option>
+        `).join('');
+
+        footer.innerHTML = `
+            <div class="bulk-actions" id="taskBulkActions">
+                <button class="btn btn-secondary" id="taskBulkStatus">Update Status</button>
+                <button class="btn btn-secondary" id="taskBulkAssign">Assign</button>
+                <button class="btn btn-danger" id="taskBulkDelete">Delete</button>
+                <span class="bulk-count" id="taskBulkCount">0 selected</span>
+            </div>
+            <div class="pagination-controls">
+                <button class="btn btn-secondary" id="tasksPaginationPrev">Previous</button>
+                <span class="pagination-label" id="tasksPaginationLabel">0-0 of 0</span>
+                <button class="btn btn-secondary" id="tasksPaginationNext">Next</button>
+                <select class="pagination-size" id="tasksPaginationSize">
+                    ${pageSizeOptions}
+                </select>
+            </div>
+        `;
+
+        this.bindPaginationEvents(footer);
+        return footer;
+    }
+
+    bindPaginationEvents(container) {
+        const prevBtn = container.querySelector('#tasksPaginationPrev');
+        const nextBtn = container.querySelector('#tasksPaginationNext');
+        const sizeSelect = container.querySelector('#tasksPaginationSize');
+
+        if (prevBtn) {
+            prevBtn.addEventListener('click', async () => {
+                if (window.taskManager) {
+                    await window.taskManager.goToPrevPage();
+                }
+            });
+        }
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', async () => {
+                if (window.taskManager) {
+                    await window.taskManager.goToNextPage();
+                }
+            });
+        }
+
+        if (sizeSelect) {
+            sizeSelect.addEventListener('change', async (e) => {
+                if (window.taskManager) {
+                    await window.taskManager.changePageSize(e.target.value);
+                }
+            });
+        }
+
+        const statusBtn = container.querySelector('#taskBulkStatus');
+        const assignBtn = container.querySelector('#taskBulkAssign');
+        const deleteBtn = container.querySelector('#taskBulkDelete');
+
+        if (statusBtn) {
+            statusBtn.addEventListener('click', () => this.handleBulkStatus());
+        }
+        if (assignBtn) {
+            assignBtn.addEventListener('click', () => this.handleBulkAssign());
+        }
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => this.handleBulkDelete());
+        }
     }
 
     // Create a single column
@@ -434,13 +529,19 @@ class TaskBoardManager {
     }
 
     // Apply filters and render filtered tasks
-    applyFilters() {
+    applyFilters(options = {}) {
         console.log('🔍 Applying filters. Active filters:', this.activeFilters);
         console.log('🔍 Sprint filter values:', this.activeFilters.sprint);
         console.log('🔍 Assignee filter values:', this.activeFilters.assignee);
         console.log('🔍 Priority filter values:', this.activeFilters.priority);
         console.log('📋 Total tasks before filtering:', this.allTasks.length);
-        
+
+        if (!options.skipServer && window.taskManager) {
+            const serverFilterUpdates = this.buildServerFilterPayload();
+            window.taskManager.updateFiltersAndReload(serverFilterUpdates, { resetPage: true });
+            return;
+        }
+
         this.filteredTasks = this.filterTasks(this.allTasks);
 
         // If current-sprint filter produces zero tasks but we have tasks overall,
@@ -899,8 +1000,8 @@ class TaskBoardManager {
             }
         }
 
-        // Generate task ID if not present
-        const taskId = task.id || 'TASK-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+        // Display shortId (kira-XXXXXX) when available, fallback to internal id
+        const displayId = task.shortId || task.id || 'TASK-' + Math.random().toString(36).substr(2, 6).toUpperCase();
         
         // Get sprint week info
         const sprintWeek = task.sprintWeek || task.sprint || '';
@@ -908,10 +1009,11 @@ class TaskBoardManager {
         card.innerHTML = `
             <div class="task-card-header">
                 <div class="task-meta-top">
-                    <span class="task-id">${taskId}</span>
+                    <span class="task-id">${displayId}</span>
                     ${sprintWeek ? `<span class="sprint-week sprint-${this.getSprintClass(sprintWeek)}">${sprintWeek}</span>` : ''}
                 </div>
                 <div class="task-actions">
+                    <input type="checkbox" class="task-select-checkbox" data-task-id="${task.id}" ${this.bulkSelection.has(task.id) ? 'checked' : ''}>
                     <img src="assets/copy-icon.jpg" alt="Copy task path" class="copy-icon" data-action="copyTaskPath" data-task-id="${task.id}" title="Copy task path" style="cursor: pointer;">
                 </div>
             </div>
@@ -933,7 +1035,13 @@ class TaskBoardManager {
 
         // Add click handler to the entire card (excluding copy icon)
         card.addEventListener('click', async (e) => {
-            // Don't open details if clicking on copy icon
+            if (e.target.classList.contains('task-select-checkbox')) {
+                this.toggleBulkSelection(task.id, e.target.checked);
+                return;
+            }
+            if (e.target.closest('.pagination-controls') || e.target.closest('.bulk-actions')) {
+                return;
+            }
             if (!e.target.closest('.task-actions') && !e.target.closest('.copy-icon')) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -942,6 +1050,37 @@ class TaskBoardManager {
         });
 
         return card;
+    }
+
+    toggleBulkSelection(taskId, checked) {
+        if (checked) {
+            this.bulkSelection.add(taskId);
+        } else {
+            this.bulkSelection.delete(taskId);
+        }
+        this.updateBulkSelectionState();
+    }
+
+    updateBulkSelectionState(selectedIds = Array.from(this.bulkSelection)) {
+        const countEl = document.getElementById('taskBulkCount');
+        if (countEl) {
+            countEl.textContent = `${selectedIds.length} selected`;
+        }
+
+        const selectors = document.querySelectorAll('.task-select-checkbox');
+        selectors.forEach((checkbox) => {
+            const id = checkbox.dataset.taskId;
+            checkbox.checked = selectedIds.includes(id);
+        });
+
+        const bulkContainer = document.getElementById('taskBulkActions');
+        if (bulkContainer) {
+            if (selectedIds.length > 0) {
+                bulkContainer.classList.add('active');
+            } else {
+                bulkContainer.classList.remove('active');
+            }
+        }
     }
 
     // Create assignee item
@@ -996,6 +1135,7 @@ class TaskBoardManager {
             if (!task) return false;
             
             return (task.task && task.task.toLowerCase().includes(term)) ||
+                   (task.shortId && task.shortId.toLowerCase().includes(term)) ||
                    (task.description && task.description.toLowerCase().includes(term)) ||
                    (task.assignedTo && task.assignedTo.toLowerCase().includes(term)) ||
                    (task.id && task.id.toLowerCase().includes(term));
@@ -1018,6 +1158,89 @@ class TaskBoardManager {
         
         // Default color for non-numeric sprints
         return 'default';
+    }
+
+    buildServerFilterPayload() {
+        const payload = {};
+
+        if (this.activeFilters.sprint && this.activeFilters.sprint.length > 0) {
+            payload.sprint = this.activeFilters.sprint.filter(value => value !== 'all');
+        }
+
+        if (this.activeFilters.assignee && this.activeFilters.assignee.length > 0) {
+            payload.assignee = this.activeFilters.assignee.filter(value => value !== 'all');
+        }
+
+        if (this.activeFilters.assignedBy && this.activeFilters.assignedBy.length > 0) {
+            payload.assignedBy = this.activeFilters.assignedBy.filter(value => value !== 'all');
+        }
+
+        if (this.activeFilters.priority && this.activeFilters.priority.length > 0) {
+            payload.priority = this.activeFilters.priority.filter(value => value !== 'all');
+        }
+
+        if (this.searchTerm && this.searchTerm.trim()) {
+            payload.search = this.searchTerm.trim();
+        }
+
+        return payload;
+    }
+
+    updatePaginationControls() {
+        if (!window.document) return;
+        const pageDisplay = document.getElementById('tasksPaginationLabel');
+        const prevBtn = document.getElementById('tasksPaginationPrev');
+        const nextBtn = document.getElementById('tasksPaginationNext');
+        const pageSizeSelect = document.getElementById('tasksPaginationSize');
+
+        if (pageDisplay) {
+            const { page, pageSize, total } = this.pagination;
+            const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
+            const end = Math.min(page * pageSize, total);
+            pageDisplay.textContent = `${start}-${end} of ${total}`;
+        }
+
+        if (prevBtn) {
+            prevBtn.disabled = !this.pagination.hasPrev;
+        }
+
+        if (nextBtn) {
+            nextBtn.disabled = !this.pagination.hasNext;
+        }
+
+        if (pageSizeSelect) {
+            pageSizeSelect.value = String(this.pagination.pageSize);
+        }
+    }
+
+    handleBulkStatus() {
+        if (!window.taskManager || this.bulkSelection.size === 0) return;
+        const status = prompt('Enter new status for selected tasks (e.g., In progress, Done, Blocked - Product):');
+        if (!status) return;
+        window.taskManager.bulkUpdateStatus(Array.from(this.bulkSelection), status).then(() => {
+            this.bulkSelection.clear();
+            this.updateBulkSelectionState();
+        });
+    }
+
+    handleBulkAssign() {
+        if (!window.taskManager || this.bulkSelection.size === 0) return;
+        const userEmail = prompt('Enter email of assignee:');
+        if (!userEmail) return;
+        const assignedBy = window.authManager?.currentUser?.email || '';
+        window.taskManager.bulkAssignTasks(Array.from(this.bulkSelection), userEmail, assignedBy).then(() => {
+            this.bulkSelection.clear();
+            this.updateBulkSelectionState();
+        });
+    }
+
+    handleBulkDelete() {
+        if (!window.taskManager || this.bulkSelection.size === 0) return;
+        if (!confirm(`Delete ${this.bulkSelection.size} tasks? This cannot be undone.`)) return;
+        window.taskManager.bulkDeleteTasks(Array.from(this.bulkSelection)).then(() => {
+            this.bulkSelection.clear();
+            this.updateBulkSelectionState();
+        });
     }
 }
 

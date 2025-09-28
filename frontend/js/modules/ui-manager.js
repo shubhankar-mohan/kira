@@ -128,6 +128,18 @@ class UIManager {
         `).join('');
     }
 
+    showCreateUserModal() {
+        if (window.modalManager) {
+            window.modalManager.showModal('createUserModal');
+        }
+    }
+
+    showCreateSprintModal() {
+        if (window.modalManager) {
+            window.modalManager.showCreateSprintModal();
+        }
+    }
+
     formatDate(dateString) {
         if (!dateString) return 'TBD';
         const date = new Date(dateString);
@@ -229,6 +241,11 @@ class UIManager {
             password: document.getElementById('userPassword').value
         };
 
+        if (!formData.name || !formData.email || !formData.role || !formData.password) {
+            this.showNotification('Please fill in all required fields.', 'error');
+            return;
+        }
+
         try {
             this.showLoading();
             const response = await api.createUser(formData);
@@ -242,11 +259,88 @@ class UIManager {
                 // Clear form
                 document.getElementById('createUserForm').reset();
             } else {
-                this.showNotification('Failed to create user: ' + response.error, 'error');
+                const message = response.error && response.error.includes('User_email_key')
+                    ? 'A user with this email already exists'
+                    : response.error || 'Failed to create user';
+                this.showNotification(message, 'error');
             }
         } catch (error) {
             console.error('Error creating user:', error);
-            this.showNotification('Failed to create user', 'error');
+            const message = error.message && error.message.includes('User_email_key')
+                ? 'A user with this email already exists'
+                : 'Failed to create user';
+            this.showNotification(message, 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async createSprint() {
+        const form = document.getElementById('createSprintForm');
+        if (!form) {
+            console.warn('createSprintForm not found');
+            return;
+        }
+
+        const formData = {
+            name: document.getElementById('sprintName')?.value?.trim(),
+            startDate: document.getElementById('sprintStartDate')?.value || null,
+            endDate: document.getElementById('sprintEndDate')?.value || null,
+            goal: document.getElementById('sprintGoal')?.value?.trim() || '',
+            status: 'Planned'
+        };
+
+        if (!formData.name || !formData.startDate || !formData.endDate) {
+            this.showNotification('Please complete all required sprint fields.', 'error');
+            return;
+        }
+
+        try {
+            this.showLoading();
+            const response = await api.createSprint(formData);
+            if (response.success) {
+                await window.taskManager.loadSprints();
+                this.renderSprints();
+                form.reset();
+                if (window.modalManager) {
+                    window.modalManager.closeModal('createSprintModal');
+                }
+                this.showNotification('Sprint created successfully!', 'success');
+            } else {
+                this.showNotification(response.error || 'Failed to create sprint', 'error');
+            }
+        } catch (error) {
+            console.error('Error creating sprint:', error);
+            const message = error.message.includes('already exists') ? 'Sprint name already exists' : 'Failed to create sprint';
+            this.showNotification(message, 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async createTaskApi(taskData) {
+        if (!taskData.task || !taskData.priority || !taskData.type) {
+            window.uiManager?.showNotification('Please fill in all required task fields.', 'error');
+            return;
+        }
+
+        try {
+            const response = await api.createTask(taskData);
+            
+            if (response.success) {
+                await window.taskManager.loadTasks();
+                if (window.taskBoardManager) {
+                    window.taskBoardManager.renderTasks(window.taskManager.tasks);
+                    window.taskBoardManager.populateFilters();
+                }
+                this.showNotification('Task created successfully!', 'success');
+            } else {
+                this.showNotification(response.error || 'Failed to create task', 'error');
+            }
+        } catch (error) {
+            console.error('Error creating task:', error);
+            const message = error.message.includes('already exists') ? 'Task name already exists' : 'Failed to create task';
+            this.showNotification(message, 'error');
         } finally {
             this.hideLoading();
         }

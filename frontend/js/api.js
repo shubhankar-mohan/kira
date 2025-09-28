@@ -29,6 +29,89 @@ class APIService {
         return headers;
     }
 
+    buildQueryString(params = {}) {
+        const searchParams = new URLSearchParams();
+
+        Object.entries(params).forEach(([key, value]) => {
+            if (value === undefined || value === null) {
+                return;
+            }
+
+            if (Array.isArray(value)) {
+                value
+                    .filter(item => item !== undefined && item !== null && item !== '')
+                    .forEach(item => searchParams.append(key, item));
+                return;
+            }
+
+            if (value instanceof Date) {
+                searchParams.append(key, value.toISOString());
+                return;
+            }
+
+            if (typeof value === 'object') {
+                // Allow objects that expose from/to or value keys (e.g. range filters)
+                const entries = Object.entries(value);
+                entries.forEach(([nestedKey, nestedValue]) => {
+                    if (nestedValue !== undefined && nestedValue !== null && nestedValue !== '') {
+                        searchParams.append(`${key}[${nestedKey}]`, nestedValue);
+                    }
+                });
+                return;
+            }
+
+            if (value === '' || Number.isNaN(value)) {
+                return;
+            }
+
+            searchParams.append(key, value);
+        });
+
+        const queryString = searchParams.toString();
+        return queryString ? `?${queryString}` : '';
+    }
+
+    mapTaskStatus(status) {
+        if (!status) return undefined;
+        const normalized = String(status).trim().toLowerCase();
+        const map = {
+            'not started': 'PENDING',
+            'pending': 'PENDING',
+            'in progress': 'IN_PROGRESS',
+            'dev testing': 'DEV_TESTING',
+            'product testing': 'PRODUCT_BLOCKED',
+            'awaiting release': 'DEV_TESTING',
+            'done': 'DONE',
+            'blocked - product': 'PRODUCT_BLOCKED',
+            'blocked - engineering': 'ENGG_BLOCKED'
+        };
+        return map[normalized] || status;
+    }
+
+    mapTaskPriority(priority) {
+        if (!priority) return undefined;
+        const normalized = String(priority).trim().toLowerCase();
+        const map = {
+            'p0': 'P0',
+            'p1': 'P1',
+            'p2': 'P2',
+            'backlog': 'BACKLOG'
+        };
+        return map[normalized] || priority;
+    }
+
+    mapTaskType(type) {
+        if (!type) return undefined;
+        const normalized = String(type).trim().toLowerCase();
+        const map = {
+            'feature': 'Feature',
+            'bug': 'Bug',
+            'improvement': 'Improvement',
+            'task': 'Task'
+        };
+        return map[normalized] || type;
+    }
+
     // Generic request method
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
@@ -99,16 +182,18 @@ class APIService {
     }
 
     // Task methods
-    async getTasks(filters = {}) {
-        const params = new URLSearchParams();
-        Object.keys(filters).forEach(key => {
-            if (filters[key]) {
-                params.append(key, filters[key]);
-            }
-        });
-        
-        const query = params.toString() ? `?${params.toString()}` : '';
+    async getTasks(params = {}) {
+        const query = this.buildQueryString(params);
         return await this.request(`/tasks${query}`);
+    }
+
+    async searchTasks(term, limit = 10, options = {}) {
+        if (!term || !term.trim()) {
+            return { success: true, data: [] };
+        }
+
+        const query = this.buildQueryString({ q: term.trim(), limit, ...options });
+        return await this.request(`/tasks/search${query}`);
     }
 
     async getTask(taskId) {
@@ -118,14 +203,24 @@ class APIService {
     async createTask(taskData) {
         return await this.request('/tasks', {
             method: 'POST',
-            body: JSON.stringify(taskData),
+            body: JSON.stringify({
+                ...taskData,
+                status: this.mapTaskStatus(taskData.status),
+                priority: this.mapTaskPriority(taskData.priority),
+                type: this.mapTaskType(taskData.type)
+            }),
         });
     }
 
     async updateTask(taskId, updates) {
         return await this.request(`/tasks/${taskId}`, {
             method: 'PUT',
-            body: JSON.stringify(updates),
+            body: JSON.stringify({
+                ...updates,
+                status: this.mapTaskStatus(updates.status),
+                priority: this.mapTaskPriority(updates.priority),
+                type: this.mapTaskType(updates.type)
+            }),
         });
     }
 
@@ -139,6 +234,37 @@ class APIService {
         return await this.request(`/tasks/${taskId}/comments`, {
             method: 'POST',
             body: JSON.stringify({ comment, user }),
+        });
+    }
+
+    async getTaskComments(taskId, params = {}) {
+        const query = this.buildQueryString(params);
+        return await this.request(`/tasks/${taskId}/comments${query}`);
+    }
+
+    async getActivityFeed(params = {}) {
+        const query = this.buildQueryString(params);
+        return await this.request(`/activity/feed${query}`);
+    }
+
+    async bulkUpdateStatus(taskIds, status, user) {
+        return await this.request('/tasks/bulk/status', {
+            method: 'POST',
+            body: JSON.stringify({ taskIds, status, user }),
+        });
+    }
+
+    async bulkAssignTasks(taskIds, userEmail, assignedByEmail) {
+        return await this.request('/tasks/bulk/assign', {
+            method: 'POST',
+            body: JSON.stringify({ taskIds, userEmail, assignedByEmail }),
+        });
+    }
+
+    async bulkDeleteTasks(taskIds) {
+        return await this.request('/tasks/bulk/delete', {
+            method: 'POST',
+            body: JSON.stringify({ taskIds }),
         });
     }
 
