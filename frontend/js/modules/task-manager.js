@@ -281,16 +281,21 @@ class TaskManager {
             });
         }
         
-        // Find current sprint(s)
-        const currentSprints = (this.sprints || []).filter(s => s.isCurrent || s.status === 'Active');
-        const currentSprintWeeks = currentSprints.map(s => s.week || s.sprintWeek);
+        // Find current sprint(s) - only those explicitly marked as current
+        const currentSprints = (this.sprints || []).filter(s => s.isCurrent === true);
+        const currentSprintWeeks = currentSprints.map(s => s.name || s.sprintWeek || s.week).filter(Boolean);
         
-        console.log('📊 Current sprints:', currentSprintWeeks);
+        console.log('📊 Current sprints:', currentSprints);
+        console.log('📊 Current sprint weeks:', currentSprintWeeks);
         
         // Filter tasks to current sprint only
         const currentSprintTasks = (this.tasks || []).filter(task => {
             const taskSprint = task.sprintWeek || task.sprint;
-            return currentSprintWeeks.includes(taskSprint);
+            const match = currentSprintWeeks.includes(taskSprint);
+            if (match) {
+                console.log('✅ Task', task.shortId || task.id, 'matches current sprint:', taskSprint);
+            }
+            return match;
         });
         
         console.log('📋 Current sprint tasks:', currentSprintTasks.length);

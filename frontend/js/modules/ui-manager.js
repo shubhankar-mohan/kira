@@ -132,30 +132,90 @@ class UIManager {
         const container = document.getElementById('recentActivityFeed');
         if (!container) return;
         try {
-            const res = await api.getActivityFeed({ page: 1, pageSize: 10 });
+            const res = await api.getActivityFeed({ limit: 30 });
             const items = Array.isArray(res.data) ? res.data : [];
+            
+            if (items.length === 0) {
+                container.innerHTML = '<div class="activity-empty">No recent activity</div>';
+                return;
+            }
+            
             container.innerHTML = items.map((a) => {
                 const avatar = (a.user || 'U').toString().charAt(0).toUpperCase();
-                const timeText = a.timestamp || '';
-                const taskId = a.taskId || '';
-                const taskTitle = a.taskTitle || '';
+                const timeAgo = this.formatTimeAgo(a.timestamp);
+                const taskId = a.taskShortId || a.taskId || '';
+                const taskTitle = this.escapeHtml(a.taskTitle || 'Untitled Task');
+                const action = a.action || '';
+                const taskStatus = a.taskStatus || '';
+                
+                // Determine activity type icon and color
+                let activityIcon = '📝';
+                let activityType = 'update';
+                if (action.toLowerCase().includes('created')) {
+                    activityIcon = '✨';
+                    activityType = 'created';
+                } else if (action.toLowerCase().includes('status')) {
+                    activityIcon = '🔄';
+                    activityType = 'status';
+                }
+                
+                // Get status badge styling
+                const statusClass = this.getStatusClass(taskStatus);
+                
                 return `
-                    <div class="activity-item" data-task-id="${taskId}">
-                        <div class="activity-avatar">${avatar}</div>
-                        <div class="activity-content">
-                            <div class="activity-header">
-                                <span class="activity-user">${a.user || 'User'}</span>
-                                <span class="activity-time">${timeText}</span>
+                    <div class="activity-card ${activityType}" data-task-id="${taskId}" onclick="window.router?.navigateToPage('task-detail', false, '${taskId}')">
+                        <div class="activity-indicator ${activityType}">
+                            <span class="activity-icon">${activityIcon}</span>
+                        </div>
+                        <div class="activity-details">
+                            <div class="activity-task-info">
+                                <span class="activity-task-id">${taskId}</span>
+                                <h4 class="activity-task-title">${taskTitle}</h4>
                             </div>
-                            <div class="activity-action">${a.action || ''} ${taskTitle ? '— ' + this.escapeHtml(taskTitle) : ''}</div>
+                            <div class="activity-meta">
+                                <div class="activity-user-info">
+                                    <div class="activity-avatar">${avatar}</div>
+                                    <span class="activity-user-name">${this.escapeHtml(a.user || 'User')}</span>
+                                </div>
+                                <span class="activity-time">${timeAgo}</span>
+                            </div>
+                            <div class="activity-action-text">
+                                ${this.escapeHtml(action)}
+                            </div>
+                            ${taskStatus ? `<span class="activity-status-badge ${statusClass}">${this.escapeHtml(taskStatus)}</span>` : ''}
                         </div>
                     </div>
                 `;
             }).join('');
         } catch (e) {
             console.error('Failed to load recent activity:', e);
-            container.innerHTML = '<div class="activity-empty">No recent activity</div>';
+            container.innerHTML = '<div class="activity-empty">⚠️ Failed to load recent activity</div>';
         }
+    }
+    
+    formatTimeAgo(timestamp) {
+        if (!timestamp) return 'Recently';
+        const date = new Date(timestamp);
+        const now = new Date();
+        const seconds = Math.floor((now - date) / 1000);
+        
+        if (seconds < 60) return 'Just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+        return date.toLocaleDateString();
+    }
+    
+    getStatusClass(status) {
+        const statusMap = {
+            'Done': 'status-done',
+            'In progress': 'status-progress',
+            'Not started': 'status-pending',
+            'Dev Testing': 'status-testing',
+            'Blocked - Product': 'status-blocked',
+            'Blocked - Engineering': 'status-blocked'
+        };
+        return statusMap[status] || 'status-default';
     }
 
     escapeHtml(text) {
@@ -267,6 +327,12 @@ class UIManager {
     }
 
     async createUser() {
+        // Prevent duplicate submissions
+        if (this.isCreatingUser) {
+            console.warn('User creation already in progress, ignoring duplicate request');
+            return;
+        }
+        
         const formData = {
             name: document.getElementById('userName').value,
             email: document.getElementById('userEmail').value,
@@ -283,6 +349,7 @@ class UIManager {
         }
 
         try {
+            this.isCreatingUser = true;
             this.showLoading();
             const response = await api.createUser(formData);
             
@@ -307,11 +374,18 @@ class UIManager {
                 : 'Failed to create user';
             this.showNotification(message, 'error');
         } finally {
+            this.isCreatingUser = false;
             this.hideLoading();
         }
     }
 
     async createSprint() {
+        // Prevent duplicate submissions
+        if (this.isCreatingSprint) {
+            console.warn('Sprint creation already in progress, ignoring duplicate request');
+            return;
+        }
+        
         const form = document.getElementById('createSprintForm');
         if (!form) {
             console.warn('createSprintForm not found');
@@ -332,6 +406,7 @@ class UIManager {
         }
 
         try {
+            this.isCreatingSprint = true;
             this.showLoading();
             const response = await api.createSprint(formData);
             if (response.success) {
@@ -350,6 +425,7 @@ class UIManager {
             const message = error.message.includes('already exists') ? 'Sprint name already exists' : 'Failed to create sprint';
             this.showNotification(message, 'error');
         } finally {
+            this.isCreatingSprint = false;
             this.hideLoading();
         }
     }

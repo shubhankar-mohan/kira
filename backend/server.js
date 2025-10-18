@@ -103,24 +103,48 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/sprints', sprintsRouter);
 
-// Activity feed
+// Activity feed - shows only task created and status updates, grouped by task (latest per task)
 activityRouter.get('/feed', async (req, res) => {
     try {
-        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-        const pageSize = Math.max(1, Math.min(parseInt(req.query.pageSize, 10) || 20, 100));
-        const offset = (page - 1) * pageSize;
+        const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 30, 100));
         if (!db || !db.getActivities) return res.json({ success: true, data: [], total: 0 });
-        // Simple feed: latest task activities
+        
+        // Fetch all tasks
         const tasks = await db.getTasks();
-        const all = [];
+        const taskMap = new Map();
+        
+        // Get activities for each task and keep only the latest relevant one per task
         for (const t of tasks) {
             const acts = await db.getActivities(t.id);
-            acts.forEach(a => all.push({ ...a, taskId: t.id, taskTitle: t.task }));
+            
+            // Filter for only 'created' and 'status update' actions
+            const relevantActs = acts.filter(a => {
+                const action = (a.action || '').toLowerCase();
+                return action.includes('created') || action.includes('status');
+            });
+            
+            // Get the most recent relevant activity for this task
+            if (relevantActs.length > 0) {
+                const latest = relevantActs[0]; // Already sorted by createdAt desc from getActivities
+                taskMap.set(t.id, {
+                    ...latest,
+                    taskId: t.id,
+                    taskTitle: t.task || t.title,
+                    taskShortId: t.shortId,
+                    taskStatus: t.status
+                });
+            }
         }
+        
+        // Convert map to array and sort by timestamp descending
+        const all = Array.from(taskMap.values());
         all.sort((a, b) => (new Date(b.timestamp).getTime()||0) - (new Date(a.timestamp).getTime()||0));
+        
+        // Return top N activities
+        const items = all.slice(0, limit);
         const total = all.length;
-        const items = all.slice(offset, offset + pageSize);
-        res.json({ success: true, data: items, total, page, pageSize, hasNext: (page * pageSize) < total });
+        
+        res.json({ success: true, data: items, total });
     } catch (e) {
         console.error('Activity feed error:', e);
         res.status(500).json({ success: false, error: 'Failed to load activity feed' });
