@@ -3,6 +3,12 @@ class ModalManager {
     constructor() {
         this.setupModalListeners();
         this.setupTaskModalEnhancements();
+
+        // Cached handlers for create task modal buttons
+        this.boundCancelHandler = null;
+        this.boundCreateHandler = null;
+        this.boundAssigneeDropdownHandler = null;
+        this.boundDropdownCloseHandler = null;
     }
 
     setupModalListeners() {
@@ -164,11 +170,7 @@ class ModalManager {
         
         switch (action) {
             case 'showCreateTaskModal':
-                if (window.taskManager) {
-                    window.taskManager.showCreateTaskModal();
-                } else {
-                    this.showModal('createTaskModal');
-                }
+                this.showModal('createTaskModal');
                 break;
             case 'showCreateUserModal':
                 this.showModal('createUserModal');
@@ -179,13 +181,11 @@ class ModalManager {
             case 'saveTaskDetails':
                 event.preventDefault();
                 event.stopPropagation();
-                if (this.validateTaskDetailForm()) {
-                    this.saveTaskDetails();
-                }
+                this.handleSaveTaskDetails();
                 break;
             case 'createTask':
                 if (this.validateCreateTaskForm()) {
-                    window.taskManager.createTask();
+                    this.handleCreateTask();
                 }
                 break;
             case 'createUser':
@@ -249,6 +249,24 @@ class ModalManager {
             case 'deleteTask':
                 this.deleteTask();
                 break;
+            case 'closeModal': {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const explicitModalId = event.target.dataset.modalId || event.target.closest('[data-modal-id]')?.dataset.modalId;
+                const modalElement = explicitModalId ? document.getElementById(explicitModalId) : event.target.closest('.modal, .task-modal-overlay');
+                const resolvedModalId = explicitModalId || modalElement?.id;
+
+                if (resolvedModalId) {
+                    this.closeModal(resolvedModalId);
+                } else {
+                    console.warn('closeModal action triggered but no modal could be resolved.', {
+                        target: event.target
+                    });
+                }
+
+                break;
+            }
             case 'closeTaskModal':
                 this.closeTaskModal();
                 break;
@@ -463,26 +481,43 @@ class ModalManager {
 
     async showModal(modalId) {
         const modal = document.getElementById(modalId);
-        if (modal) {
+        if (!modal) {
+            console.error(`Modal with ID '${modalId}' not found`);
+            return;
+        }
+
+        try {
+            console.log(`🎭 Opening modal: ${modalId}`);
+
             // Reset any previous animations
             const modalContainer = modal.querySelector('.task-modal-container');
             if (modalContainer) {
                 modalContainer.style.animation = '';
             }
-            
+
             modal.style.display = 'flex';
             modal.classList.add('show');
-            
+
             // Special handling for create task modal
             if (modalId === 'createTaskModal') {
-                // Re-populate dropdowns with latest data
-                await this.refreshCreateTaskDropdowns();
-                // Ensure body exists/visible
-                const body = modal.querySelector('.task-modal-body');
-                if (body) body.style.display = '';
-                // Ensure footer visible
-                const footer = modal.querySelector('.task-modal-footer');
-                if (footer) footer.style.display = '';
+                try {
+                    // Re-populate dropdowns with latest data
+                    await this.refreshCreateTaskDropdowns();
+                    this.bindCreateTaskModalEvents(modal);
+                    // Ensure body exists/visible
+                    const body = modal.querySelector('.task-modal-body');
+                    if (body) body.style.display = '';
+                    // Ensure footer visible
+                    const footer = modal.querySelector('.task-modal-footer');
+                    if (footer) {
+                        footer.style.display = '';
+                        this.setupTaskFooterActions(footer);
+                    }
+                    console.log('✅ Create task modal initialized successfully');
+                } catch (error) {
+                    console.error('❌ Error initializing create task modal:', error);
+                    // Show error but don't prevent modal from opening
+                }
             }
             
             // Ensure edit modal has a visible Save button
@@ -502,132 +537,317 @@ class ModalManager {
                         </svg>
                         Save Changes`;
                     btn.addEventListener('click', () => {
-                        if (window.modalManager) window.modalManager.saveTaskDetails();
+                        if (window.modalManager) window.modalManager.handleSaveTaskDetails();
                     });
                     footer.appendChild(btn);
                 }
             }
-            
+
             // Focus first input in modal
             const firstInput = modal.querySelector('input, select, textarea');
             if (firstInput) {
                 firstInput.focus();
             }
+
+            console.log(`✅ Modal ${modalId} opened successfully`);
+        } catch (error) {
+            console.error(`❌ Error opening modal ${modalId}:`, error);
         }
     }
     
     // Method to refresh all dropdowns in create task modal
     async refreshCreateTaskDropdowns() {
-        await this.refreshAssigneeDropdown();
-        await this.refreshSprintDropdown();
+        try {
+            await Promise.all([
+                this.refreshAssigneeDropdown(),
+                this.refreshSprintDropdown()
+            ]);
+            console.log('✅ All dropdowns refreshed successfully');
+        } catch (error) {
+            console.error('❌ Error refreshing dropdowns:', error);
+            // Don't throw error - let modal continue to open even if dropdown refresh fails
+        }
+    }
+
+    bindCreateTaskModalEvents(modal) {
+        if (!modal) return;
+
+        // Set up assignee multiselect dropdown behavior
+        const multiselectDisplay = modal.querySelector('.task-assignee-multiselect .multiselect-display');
+        const dropdown = modal.querySelector('#taskAssigneeDropdown');
+
+        if (multiselectDisplay && dropdown) {
+            if (!this.boundAssigneeDropdownHandler) {
+                this.boundAssigneeDropdownHandler = (event) => {
+                    event.stopPropagation();
+                    dropdown.classList.toggle('open');
+                    multiselectDisplay.classList.toggle('open');
+                };
+            }
+
+            multiselectDisplay.removeEventListener('click', this.boundAssigneeDropdownHandler);
+            multiselectDisplay.addEventListener('click', this.boundAssigneeDropdownHandler);
+
+            // Close dropdown when clicking outside
+            if (!this.boundDropdownCloseHandler) {
+                this.boundDropdownCloseHandler = (event) => {
+                    if (!modal.contains(event.target)) {
+                        dropdown.classList.remove('open');
+                        multiselectDisplay.classList.remove('open');
+                    }
+                };
+            }
+
+            document.removeEventListener('click', this.boundDropdownCloseHandler);
+            setTimeout(() => {
+                document.addEventListener('click', this.boundDropdownCloseHandler);
+            }, 0);
+        }
+
+        // Sync checkbox selections into hidden input
+        if (dropdown) {
+            dropdown.removeEventListener('change', this.boundAssigneeChangeHandler);
+            if (!this.boundAssigneeChangeHandler) {
+                this.boundAssigneeChangeHandler = this.handleAssigneeSelectionChange.bind(this);
+            }
+            dropdown.addEventListener('change', this.boundAssigneeChangeHandler);
+        }
+    }
+
+    handleAssigneeSelectionChange() {
+        const dropdown = document.getElementById('taskAssigneeDropdown');
+        const hiddenInput = document.getElementById('taskAssignee');
+        const displayText = document.querySelector('.task-assignee-multiselect .multiselect-text');
+
+        if (!dropdown || !hiddenInput) return;
+
+        const selected = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked'))
+            .map((checkbox) => checkbox.parentElement?.dataset.value)
+            .filter(Boolean);
+
+        hiddenInput.value = selected.join(',');
+
+        if (displayText) {
+            displayText.textContent = selected.length > 0 ? `${selected.length} selected` : 'Select assignees';
+        }
+    }
+
+    setupTaskFooterActions(footer) {
+        if (!footer) return;
+
+        const cancelBtn = footer.querySelector('[data-action="closeModal"][data-modal-id="createTaskModal"]');
+        const createBtn = footer.querySelector('[data-action="createTask"]');
+
+        if (cancelBtn) {
+            cancelBtn.removeEventListener('click', this.boundCancelHandler);
+            this.boundCancelHandler = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.closeModal('createTaskModal');
+            };
+            cancelBtn.addEventListener('click', this.boundCancelHandler);
+        }
+
+        if (createBtn) {
+            createBtn.removeEventListener('click', this.boundCreateHandler);
+            this.boundCreateHandler = async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                await this.handleCreateTask();
+            };
+            createBtn.addEventListener('click', this.boundCreateHandler);
+        }
+    }
+
+    async handleCreateTask() {
+        if (!this.validateCreateTaskForm()) return;
+
+        const createBtn = document.querySelector('#createTaskModal [data-action="createTask"]');
+        const originalContent = createBtn ? createBtn.innerHTML : null;
+
+        try {
+            this.setButtonLoadingState(createBtn, 'Creating...');
+            const result = await window.taskManager.createTask();
+            if (!result?.success) {
+                const message = result?.error?.message || result?.error || 'Failed to create task. Please try again.';
+                window.uiManager?.showNotification(message, 'error');
+                return;
+            }
+            window.uiManager?.showNotification('Task created successfully!', 'success');
+        } finally {
+            this.resetButtonState(createBtn, originalContent);
+        }
+    }
+
+    handleSaveTaskDetails() {
+        if (!this.validateTaskDetailForm()) {
+            return;
+        }
+
+        const saveBtn = document.querySelector('#taskDetailsModal .task-btn-primary');
+        const originalContent = saveBtn ? saveBtn.innerHTML : null;
+
+        this.setButtonLoadingState(saveBtn, 'Saving...');
+
+        this.saveTaskDetails()
+            .catch((error) => {
+                console.error('saveTaskDetails failed:', error);
+            })
+            .finally(() => {
+                this.resetButtonState(saveBtn, originalContent);
+            });
+    }
+
+    setButtonLoadingState(button, label) {
+        if (!button) return;
+
+        button.disabled = true;
+        button.classList.add('is-loading');
+        button.dataset.originalLabel = button.dataset.originalLabel || button.textContent?.trim() || '';
+        button.innerHTML = `
+            <svg class="task-btn-icon task-animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="m9 12 2 2 4-4"></path>
+            </svg>
+            ${label}`;
+    }
+
+    resetButtonState(button, originalContent) {
+        if (!button) return;
+
+        button.disabled = false;
+        button.classList.remove('is-loading');
+
+        if (originalContent !== null) {
+            button.innerHTML = originalContent;
+        } else if (button.dataset.originalLabel) {
+            button.textContent = button.dataset.originalLabel;
+        }
     }
     
     // Method to refresh assignee dropdown data
     async refreshAssigneeDropdown() {
         const assigneeDropdown = document.getElementById('taskAssigneeDropdown');
-        if (!assigneeDropdown) return;
-        
-        if (!window.taskManager || !window.taskManager.users || window.taskManager.users.length === 0) {
-            console.log('refreshAssigneeDropdown: no users available', {
-                taskManager: !!window.taskManager,
-                users: window.taskManager?.users?.length || 0
-            });
-            // Try fetching users as a fallback
-            try {
-                const res = await api.getUsers();
-                const users = res?.data || res?.users || [];
-                if (Array.isArray(users) && users.length) {
-                    window.taskManager.users = users;
-                }
-            } catch (e) {
-                console.warn('refreshAssigneeDropdown: fetch users failed');
-            }
-            if (!window.taskManager.users || window.taskManager.users.length === 0) {
-                assigneeDropdown.innerHTML = '<div class="multiselect-option disabled">No users available</div>';
-                return;
-            }
+        if (!assigneeDropdown) {
+            console.warn('taskAssigneeDropdown element not found');
+            return;
         }
-        
-        console.log('refreshAssigneeDropdown: populating', window.taskManager.users.length, 'users');
-        
-        assigneeDropdown.innerHTML = window.taskManager.users.map(user => `
-            <div class="multiselect-option" data-value="${user.email}">
-                <input type="checkbox" id="assignee-${user.email.replace(/[^a-zA-Z0-9]/g, '-')}" data-assignee-checkbox>
-                <label for="assignee-${user.email.replace(/[^a-zA-Z0-9]/g, '-')}">${user.name || user.email}</label>
-            </div>
-        `).join('');
+
+        try {
+            if (!window.taskManager || !window.taskManager.users || window.taskManager.users.length === 0) {
+                console.log('refreshAssigneeDropdown: no users available', {
+                    taskManager: !!window.taskManager,
+                    users: window.taskManager?.users?.length || 0
+                });
+                // Try fetching users as a fallback
+                try {
+                    const res = await api.getUsers();
+                    const users = res?.data || res?.users || [];
+                    if (Array.isArray(users) && users.length) {
+                        window.taskManager.users = users;
+                    }
+                } catch (e) {
+                    console.warn('refreshAssigneeDropdown: fetch users failed');
+                }
+                if (!window.taskManager.users || window.taskManager.users.length === 0) {
+                    assigneeDropdown.innerHTML = '<div class="multiselect-option disabled">No users available</div>';
+                    return;
+                }
+            }
+
+            console.log('refreshAssigneeDropdown: populating', window.taskManager.users.length, 'users');
+
+            assigneeDropdown.innerHTML = window.taskManager.users.map(user => `
+                <div class="multiselect-option" data-value="${user.email}">
+                    <input type="checkbox" id="assignee-${user.email.replace(/[^a-zA-Z0-9]/g, '-')}" data-assignee-checkbox>
+                    <label for="assignee-${user.email.replace(/[^a-zA-Z0-9]/g, '-')}">${user.name || user.email}</label>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Error refreshing assignee dropdown:', error);
+            assigneeDropdown.innerHTML = '<div class="multiselect-option disabled">Error loading users</div>';
+        }
     }
     
     // Method to refresh sprint dropdown data
     async refreshSprintDropdown() {
         const sprintSelect = document.getElementById('taskSprint');
-        if (!sprintSelect) return;
-        
-        if (!window.taskManager || !window.taskManager.sprints || window.taskManager.sprints.length === 0) {
-            console.log('refreshSprintDropdown: no sprints available', {
-                taskManager: !!window.taskManager,
-                sprints: window.taskManager?.sprints?.length || 0
-            });
-            // Try fetching sprints as a fallback
-            try {
-                const res = await api.getSprints();
-                const sprints = res?.data || res?.sprints || [];
-                if (Array.isArray(sprints) && sprints.length) {
-                    window.taskManager.sprints = sprints;
+        if (!sprintSelect) {
+            console.warn('taskSprint element not found');
+            return;
+        }
+
+        try {
+            if (!window.taskManager || !window.taskManager.sprints || window.taskManager.sprints.length === 0) {
+                console.log('refreshSprintDropdown: no sprints available', {
+                    taskManager: !!window.taskManager,
+                    sprints: window.taskManager?.sprints?.length || 0
+                });
+                // Try fetching sprints as a fallback
+                try {
+                    const res = await api.getSprints();
+                    const sprints = res?.data || res?.sprints || [];
+                    if (Array.isArray(sprints) && sprints.length) {
+                        window.taskManager.sprints = sprints;
+                    }
+                } catch (e) {
+                    console.warn('refreshSprintDropdown: fetch sprints failed');
                 }
-            } catch (e) {
-                console.warn('refreshSprintDropdown: fetch sprints failed');
+                if (!window.taskManager.sprints || window.taskManager.sprints.length === 0) {
+                    sprintSelect.innerHTML = '<option value="">No Sprint</option><option disabled>No sprints available</option>';
+                    return;
+                }
             }
-            if (!window.taskManager.sprints || window.taskManager.sprints.length === 0) {
-                sprintSelect.innerHTML = '<option value="">No Sprint</option><option disabled>No sprints available</option>';
-                return;
+
+            console.log('refreshSprintDropdown: populating', window.taskManager.sprints.length, 'sprints');
+
+            sprintSelect.innerHTML = '<option value="">No Sprint</option>';
+
+            // Separate current and non-current sprints
+            const currentSprints = window.taskManager.sprints.filter(sprint => sprint.isCurrent);
+            const otherSprints = window.taskManager.sprints.filter(sprint => !sprint.isCurrent);
+
+            // Sort other sprints by week number (descending, so newest non-current sprints appear first)
+            otherSprints.sort((a, b) => {
+                const getWeekNumber = (sprint) => {
+                    const sprintWeek = sprint.name || sprint.sprintWeek || sprint.week || '';
+                    const match = sprintWeek.match(/W?(\d+)/);
+                    return match ? parseInt(match[1]) : 0;
+                };
+                return getWeekNumber(b) - getWeekNumber(a);
+            });
+
+            // Add current sprints first (at top)
+            currentSprints.forEach(sprint => {
+                const option = document.createElement('option');
+                option.value = sprint.sprintWeek || sprint.name;
+                option.textContent = `🎯 ${sprint.sprintWeek || sprint.name} (Current)`;
+                sprintSelect.appendChild(option);
+            });
+
+            // Add separator if there are current sprints
+            if (currentSprints.length > 0 && otherSprints.length > 0) {
+                const separator = document.createElement('option');
+                separator.disabled = true;
+                separator.textContent = '─────────────';
+                sprintSelect.appendChild(separator);
             }
+
+            // Add all other sprints (including past sprints)
+            otherSprints.forEach(sprint => {
+                const option = document.createElement('option');
+                option.value = sprint.sprintWeek || sprint.name;
+                option.textContent = sprint.sprintWeek || sprint.name;
+                sprintSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error refreshing sprint dropdown:', error);
+            sprintSelect.innerHTML = '<option value="">No Sprint</option><option disabled>Error loading sprints</option>';
         }
-        
-        console.log('refreshSprintDropdown: populating', window.taskManager.sprints.length, 'sprints');
-        
-        sprintSelect.innerHTML = '<option value="">No Sprint</option>';
-        
-        // Separate current and non-current sprints
-        const currentSprints = window.taskManager.sprints.filter(sprint => sprint.isCurrent);
-        const otherSprints = window.taskManager.sprints.filter(sprint => !sprint.isCurrent);
-        
-        // Sort other sprints by week number (descending, so newest non-current sprints appear first)
-        otherSprints.sort((a, b) => {
-            const getWeekNumber = (sprint) => {
-                const sprintWeek = sprint.name || sprint.sprintWeek || sprint.week || '';
-                const match = sprintWeek.match(/W?(\d+)/);
-                return match ? parseInt(match[1]) : 0;
-            };
-            return getWeekNumber(b) - getWeekNumber(a);
-        });
-        
-        // Add current sprints first (at top)
-        currentSprints.forEach(sprint => {
-            const option = document.createElement('option');
-            option.value = sprint.sprintWeek || sprint.name;
-            option.textContent = `🎯 ${sprint.sprintWeek || sprint.name} (Current)`;
-            sprintSelect.appendChild(option);
-        });
-        
-        // Add separator if there are current sprints
-        if (currentSprints.length > 0 && otherSprints.length > 0) {
-            const separator = document.createElement('option');
-            separator.disabled = true;
-            separator.textContent = '─────────────';
-            sprintSelect.appendChild(separator);
-        }
-        
-        // Add all other sprints (including past sprints)
-        otherSprints.forEach(sprint => {
-            const option = document.createElement('option');
-            option.value = sprint.sprintWeek || sprint.name;
-            option.textContent = sprint.sprintWeek || sprint.name;
-            sprintSelect.appendChild(option);
-        });
     }
 
-    closeModal(modalId) {
+    closeModal(modalId, options = {}) {
+        const { force = false } = options;
         const modal = document.getElementById(modalId);
         if (modal) {
             // Handle task modal specially
@@ -637,7 +857,7 @@ class ModalManager {
             }
             
             // Check for unsaved changes in create task modal
-            if (modalId === 'createTaskModal') {
+            if (!force && modalId === 'createTaskModal') {
                 const hasChanges = this.hasUnsavedFormChanges(modalId) || modal.dataset.dirty === 'true';
                 if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to close?')) {
                     return;
@@ -725,7 +945,7 @@ class ModalManager {
         const taskAssigneeName = document.getElementById('taskAssigneeName');
         const taskSprintName = document.getElementById('taskSprintName');
 
-        if (taskIdBadge) taskIdBadge.textContent = task.id || 'NEW';
+        if (taskIdBadge) taskIdBadge.textContent = task.shortId || task.id || 'NEW';
         if (taskTitle) taskTitle.textContent = task.task || 'Task Details';
         
         if (taskStatusBadge) {
@@ -841,20 +1061,6 @@ class ModalManager {
 
     async saveTaskDetails() {
         if (!window.taskManager.currentTaskId) return;
-
-        const saveBtn = document.querySelector('.task-btn-primary');
-        const originalContent = saveBtn.innerHTML;
-        
-        // Show loading state
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = `
-            <svg class="task-btn-icon task-animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="m9 12 2 2 4-4"></path>
-            </svg>
-            Saving...
-        `;
-
         const taskData = {
             task: document.getElementById('detailTaskTitle').value,
             status: document.getElementById('detailTaskStatus').value,
@@ -919,8 +1125,8 @@ class ModalManager {
         } catch (error) {
             console.error('Error updating task:', error);
             window.taskManager.showNotification('Error updating task', 'error');
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = originalContent;
+        } finally {
+            window.taskManager.hideLoading();
         }
     }
 
@@ -928,8 +1134,12 @@ class ModalManager {
         const activityFeed = document.getElementById('taskActivityFeed');
         if (!activityFeed) return;
         try {
-            const res = await api.getTask(taskId);
-            const task = res.data || {};
+            // Prefer dedicated comments endpoint for freshness
+            const [taskRes, commentsRes] = await Promise.all([
+                api.getTask(taskId),
+                api.getTaskComments(taskId)
+            ]);
+            const task = taskRes.data || {};
             const activities = Array.isArray(task.activities) ? task.activities : [];
             const render = (a) => {
                 const avatar = (a.user || 'U').charAt(0).toUpperCase();
@@ -959,9 +1169,9 @@ class ModalManager {
         const commentsFeed = document.getElementById('taskCommentsFeed');
         if (!commentsFeed) return;
         try {
-            const res = await api.getTask(taskId);
-            const task = res.data || {};
-            const comments = Array.isArray(task.comments) ? task.comments : [];
+            // Use dedicated endpoint so newest comments appear without reloading task
+            const res = await api.getTaskComments(taskId, { limit: 100 });
+            const comments = Array.isArray(res.data) ? res.data : [];
             const render = (c) => {
                 const avatar = (c.user || 'U').charAt(0).toUpperCase();
                 const sourceBadge = c.source === 'slack' ? '<span class="comment-source slack">Slack</span>' : '<span class="comment-source web">Dashboard</span>';
@@ -1053,7 +1263,7 @@ class ModalManager {
     async addComment() {
         const textarea = document.getElementById('taskCommentTextarea');
         const comment = textarea.value.trim();
-        
+
         if (!comment) {
             window.taskManager.showNotification('Please enter a comment', 'error');
             return;
@@ -1067,9 +1277,15 @@ class ModalManager {
                 return;
             }
 
-            // Post to backend
-            const userName = window.authManager?.currentUser?.name || 'Anonymous';
-            const response = await api.addComment(taskId, comment, userName);
+            // Get current user information
+            const currentUser = window.authManager?.currentUser;
+            if (!currentUser) {
+                window.taskManager.showNotification('User not authenticated', 'error');
+                return;
+            }
+
+            // Post to backend with proper user information
+            const response = await api.addComment(taskId, comment, currentUser.name || currentUser.email, currentUser.email);
 
             if (response && response.success) {
                 // Refresh comments from API to avoid duplicate rendering

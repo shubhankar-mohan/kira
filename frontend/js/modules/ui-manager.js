@@ -128,6 +128,42 @@ class UIManager {
         `).join('');
     }
 
+    async renderRecentActivity() {
+        const container = document.getElementById('recentActivityFeed');
+        if (!container) return;
+        try {
+            const res = await api.getActivityFeed({ page: 1, pageSize: 10 });
+            const items = Array.isArray(res.data) ? res.data : [];
+            container.innerHTML = items.map((a) => {
+                const avatar = (a.user || 'U').toString().charAt(0).toUpperCase();
+                const timeText = a.timestamp || '';
+                const taskId = a.taskId || '';
+                const taskTitle = a.taskTitle || '';
+                return `
+                    <div class="activity-item" data-task-id="${taskId}">
+                        <div class="activity-avatar">${avatar}</div>
+                        <div class="activity-content">
+                            <div class="activity-header">
+                                <span class="activity-user">${a.user || 'User'}</span>
+                                <span class="activity-time">${timeText}</span>
+                            </div>
+                            <div class="activity-action">${a.action || ''} ${taskTitle ? '— ' + this.escapeHtml(taskTitle) : ''}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (e) {
+            console.error('Failed to load recent activity:', e);
+            container.innerHTML = '<div class="activity-empty">No recent activity</div>';
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
     showCreateUserModal() {
         if (window.modalManager) {
             window.modalManager.showModal('createUserModal');

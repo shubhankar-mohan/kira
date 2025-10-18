@@ -20,7 +20,7 @@ class TaskBoardManager {
         this.allTasks = [];
         this.filteredTasks = [];
         this.activeFilters = {
-            sprint: ['current'], // Default to current sprint filter
+            sprint: [],
             assignee: [],
             assignedBy: [],
             priority: [],
@@ -1014,7 +1014,7 @@ class TaskBoardManager {
                 </div>
                 <div class="task-actions">
                     <input type="checkbox" class="task-select-checkbox" data-task-id="${task.id}" ${this.bulkSelection.has(task.id) ? 'checked' : ''}>
-                    <img src="assets/copy-icon.jpg" alt="Copy task path" class="copy-icon" data-action="copyTaskPath" data-task-id="${task.id}" title="Copy task path" style="cursor: pointer;">
+                    <img src="assets/copy-icon.jpg" alt="Copy task path" class="copy-icon" data-action="copyTaskPath" data-task-id="${displayId}" title="Copy task path" style="cursor: pointer;">
                 </div>
             </div>
             <div class="task-title" data-action="openTaskDetails" data-task-id="${task.id}" style="cursor: pointer;">${this.escapeHtml(task.task || 'Untitled Task')}</div>
@@ -1164,7 +1164,7 @@ class TaskBoardManager {
         const payload = {};
 
         if (this.activeFilters.sprint && this.activeFilters.sprint.length > 0) {
-            payload.sprint = this.activeFilters.sprint.filter(value => value !== 'all');
+            payload.sprint = this.activeFilters.sprint.filter(value => value !== 'all' && value !== 'current');
         }
 
         if (this.activeFilters.assignee && this.activeFilters.assignee.length > 0) {

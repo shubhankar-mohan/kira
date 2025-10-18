@@ -55,6 +55,10 @@ class App {
             
             console.log('Updating dashboard...');
             window.taskManager.updateDashboard();
+            // Load recent activity widget if present
+            if (window.uiManager && typeof window.uiManager.renderRecentActivity === 'function') {
+                window.uiManager.renderRecentActivity();
+            }
             
             console.log('Creating task board...');
             if (window.taskBoardManager) {
@@ -427,10 +431,10 @@ class App {
             }
         }
 
-        const idDisplay = document.querySelector('.task-id-badge');
-        if (idDisplay) {
-            idDisplay.textContent = task.shortId || task.id || 'NEW';
-        }
+            const idDisplay = document.querySelector('.task-id-badge');
+            if (idDisplay) {
+                idDisplay.textContent = task.shortId || task.id || 'NEW';
+            }
     }
 
     populatePageTaskDropdowns() {
@@ -499,33 +503,7 @@ class App {
     }
 
     async sendSlackTaskUpdate(taskId, taskData) {
-        try {
-            // Get the current user info
-            const currentUser = window.authManager.currentUser ? window.authManager.currentUser.name : 'Unknown User';
-            
-            // Determine what changed
-            const originalTask = window.taskManager.tasks.find(t => t.id === taskId);
-            const changes = {};
-            
-            if (originalTask) {
-                if (taskData.status !== originalTask.status) changes.status = taskData.status;
-                if (taskData.priority !== originalTask.priority) changes.priority = taskData.priority;
-                if (taskData.assignedTo !== originalTask.assignedTo) changes.assignedTo = taskData.assignedTo;
-                if (taskData.description !== originalTask.description) changes.description = true;
-                if (taskData.sprintWeek !== originalTask.sprintWeek) changes.sprintWeek = taskData.sprintWeek;
-            }
-            
-            // Send task update notification with thread support
-            await api.sendTaskUpdateNotification(
-                taskId, 
-                taskData.task, 
-                currentUser, 
-                changes
-            );
-        } catch (error) {
-            console.error('Failed to send Slack notification:', error);
-            // Don't show error to user for Slack notifications
-        }
+        return window.taskManager?.sendSlackTaskUpdate(taskId, taskData);
     }
 }
 

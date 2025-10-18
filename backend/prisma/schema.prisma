@@ -106,10 +106,8 @@ model User {
   events         Event[]
   activityLogs   ActivityLog[]
 
-  @@index([email])
   @@index([role])
   @@index([isActive])
-  @@index([createdAt])
 }
 
 model Sprint {
@@ -139,7 +137,7 @@ model Task {
   id              String       @id @default(uuid()) @db.Char(36)
   displayId       Int?         @unique
   title           String       @db.VarChar(500)
-  description     String?      @db.Text
+  description     String?
   status          TaskStatus   @default(PENDING)
   priority        TaskPriority @default(BACKLOG)
   type            TaskType     @default(Task)
@@ -149,26 +147,26 @@ model Task {
   tags            Json?
   metadata        Json?
 
-  sprintId     String?      @db.Char(36)
-  sprint       Sprint?      @relation(fields: [sprintId], references: [id])
-  parentTaskId String?      @db.Char(36)
-  parentTask   Task?        @relation("Subtasks", fields: [parentTaskId], references: [id])
-  subtasks     Task[]       @relation("Subtasks")
+  sprintId     String?
+  sprint       Sprint?     @relation(fields: [sprintId], references: [id])
+  parentTaskId String?
+  parentTask   Task?       @relation("Subtasks", fields: [parentTaskId], references: [id])
+  subtasks     Task[]      @relation("Subtasks")
 
   // Slack integration
-  slackThreadTs  String?      @db.VarChar(50)
-  slackChannelId String?      @db.VarChar(50)
-  createdFrom    CreatedFrom  @default(Web)
+  slackThreadTs  String?   @db.VarChar(50)
+  slackChannelId String?   @db.VarChar(50)
+  createdFrom    CreatedFrom @default(Web)
 
   // Audit
-  createdById  String?      @db.Char(36)
-  createdBy    User?        @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  updatedById  String?      @db.Char(36)
-  updatedBy    User?        @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
+  createdById  String?
+  createdBy    User?       @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  updatedById  String?
+  updatedBy    User?       @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
   completedAt  DateTime?
   dueDate      DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   assignments  TaskAssignment[]
   comments     Comment[]
@@ -186,9 +184,6 @@ model Task {
   @@index([orderIndex])
   @@index([slackThreadTs])
   @@index([slackChannelId])
-  @@index([createdById])
-  @@index([updatedById])
-  @@index([title])
 }
 
 // Sequence table to generate incremental task display IDs

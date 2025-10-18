@@ -230,10 +230,10 @@ class APIService {
         });
     }
 
-    async addComment(taskId, comment, user) {
+    async addComment(taskId, comment, user, userEmail) {
         return await this.request(`/tasks/${taskId}/comments`, {
             method: 'POST',
-            body: JSON.stringify({ comment, user }),
+            body: JSON.stringify({ comment, user, userEmail }),
         });
     }
 

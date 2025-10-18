@@ -140,16 +140,22 @@ router.post('/', async (req, res) => {
         // Post a Slack thread for this dashboard-created task if not already linked
         try {
             const { channel, thread_ts } = await slackService.postTaskCreatedThread({ ...newTask, id: newTask.id });
-            // Persist Slack thread & channel onto task
-            await db.updateTask(newTask.id, {
-                slackThreadId: thread_ts,
-                slackChannelId: channel,
-                lastEditedBy: taskData.createdBy || 'API User'
-            });
-            newTask.slackThreadId = thread_ts;
-            newTask.slackChannelId = channel;
+            if (channel && thread_ts) {
+                // Persist Slack thread & channel onto task
+                await db.updateTask(newTask.id, {
+                    slackThreadId: thread_ts,
+                    slackChannelId: channel,
+                    lastEditedBy: taskData.createdBy || 'API User'
+                });
+                newTask.slackThreadId = thread_ts;
+                newTask.slackChannelId = channel;
+                console.log('Created Slack thread for task:', { taskId: newTask.id, channel, thread_ts });
+            } else {
+                console.warn('Slack thread creation returned no channel/thread_ts:', { channel, thread_ts });
+            }
         } catch (err) {
             console.error('Failed to start Slack thread for task:', err.message);
+            // Don't fail task creation if Slack fails
         }
 
         res.status(201).json({
@@ -235,13 +241,14 @@ router.post('/:id/comments', async (req, res) => {
         const commentData = {
             taskId: req.params.id,
             user: req.body.user || 'Anonymous',
+            userEmail: req.body.userEmail || '',
             comment: req.body.comment
         };
 
         if (!commentData.comment) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Comment text is required' 
+            return res.status(400).json({
+                success: false,
+                error: 'Comment text is required'
             });
         }
 
@@ -255,12 +262,26 @@ router.post('/:id/comments', async (req, res) => {
         if (task && task.slackThreadId && task.slackChannelId) {
             try {
                 slackChannelId = task.slackChannelId;
-                // Bold author and separate message clearly
-                const slackText = `*${commentData.user}*\n${commentData.comment}`;
+                let slackAuthor = commentData.user;
+                if (commentData.userEmail) {
+                    const slackId = await slackService.getSlackUserIdByEmail(commentData.userEmail);
+                    if (slackId) {
+                        slackAuthor = `<@${slackId}>`;
+                    }
+                }
+                const slackText = `*${slackAuthor}*\n${commentData.comment}`;
                 slackMessageTs = await slackService.postCommentToThread(task.slackChannelId, task.slackThreadId, slackText);
+                console.log('Comment posted to Slack thread:', { taskId: task.id, threadId: task.slackThreadId, messageTs: slackMessageTs });
             } catch (err) {
                 console.error('Failed to mirror comment to Slack:', err.message);
+                // Don't fail the comment creation if Slack posting fails
             }
+        } else if (task) {
+            console.log('Task not linked to Slack thread or missing Slack metadata:', {
+                taskId: task.id,
+                hasSlackThreadId: !!task.slackThreadId,
+                hasSlackChannelId: !!task.slackChannelId
+            });
         }
 
         // Add a single comment row in Sheets with Slack metadata if available

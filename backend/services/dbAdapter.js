@@ -26,12 +26,12 @@ function mapTaskToLegacy(task) {
         id: task.id,
         shortId,
         task: task.title,
-        status: task.status, // caller may use new statuses; UI migration planned
-        priority: task.priority,
+        status: mapStatusForLegacy(task.status),
+        priority: mapPriorityForLegacy(task.priority),
         description: task.description || '',
-        dueDate: task.dueDate ? new Date(task.dueDate).toISOString() : '',
+        dueDate: task.dueDate ? task.dueDate.toISOString() : '',
         assignedTo,
-        type: task.type,
+        type: mapTypeForLegacy(task.type),
         sprintPoints: task.storyPoints || 0,
         category: '',
         devTestingDoneBy: '',
@@ -43,12 +43,42 @@ function mapTaskToLegacy(task) {
         sprintWeek: task.sprint?.name || '',
         furtherDevelopmentNeeded: '',
         sprintSpilloverTask: 'No',
-        message: '',
-        attachment: '',
-        slackThreadId: task.slackThreadTs || '',
-        slackChannelId: task.slackChannelId || '',
+        message: task.message || '',
+        attachment: task.attachment || '',
+        slackThreadId: task.slackThreadTs || null,
+        slackChannelId: task.slackChannelId || null,
         year: formatYear(task.createdAt)
     };
+}
+
+function mapPriorityForLegacy(priority) {
+    if (!priority) return 'P2';
+    return priority === 'BACKLOG' ? 'Backlog' : priority;
+}
+
+function mapTypeForLegacy(type) {
+    if (!type) return 'Task';
+    const map = {
+        Feature: 'Feature',
+        Bug: 'Bug',
+        Improvement: 'Improvement',
+        Task: 'Task'
+    };
+    return map[type] || 'Task';
+}
+
+function mapStatusForLegacy(status) {
+    if (!status) return 'Not started';
+    const map = {
+        PENDING: 'Not started',
+        IN_PROGRESS: 'In progress',
+        DEV_TESTING: 'Dev Testing',
+        PRODUCT_BLOCKED: 'Blocked - Product',
+        ENGG_BLOCKED: 'Blocked - Engineering',
+        DONE: 'Done',
+        NOT_REQUIRED: 'Awaiting Release'
+    };
+    return map[status] || status;
 }
 
 async function ensureDisplayIdSequenceInitialized() {
@@ -276,11 +306,17 @@ async function deleteTask(taskId) {
 
 async function getComments(taskId) {
     if (!isMysql()) return googleSheets.getComments(taskId);
-    const comments = await prisma.comment.findMany({ where: { taskId }, orderBy: { createdAt: 'desc' } });
+    const comments = await prisma.comment.findMany({
+        where: { taskId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+            user: true
+        }
+    });
     return comments.map(c => ({
         id: c.id,
         taskId: c.taskId,
-        user: c.userId || 'System',
+        user: c.authorName || c.user?.name || c.userId || 'System',
         comment: c.content,
         timestamp: c.createdAt?.toISOString?.() || '',
         slackMessageTs: c.slackTs || '',
@@ -291,24 +327,39 @@ async function getComments(taskId) {
 
 async function addComment(commentData) {
     if (!isMysql()) return googleSheets.addComment(commentData);
+    // Resolve userId by email if provided; keep null if not resolvable
+    let resolvedUser = null;
+    if (commentData.userEmail) {
+        try {
+            resolvedUser = await prisma.user.findUnique({ where: { email: commentData.userEmail } });
+        } catch (error) {
+            console.error('Error resolving user by email:', error.message);
+        }
+    }
+
+    // Ensure we have a valid user name
+    const authorName = commentData.user || resolvedUser?.name || commentData.userEmail || 'Anonymous';
+
     const created = await prisma.comment.create({
         data: {
             taskId: commentData.taskId,
             content: commentData.comment,
-            source: 'Web',
+            source: mapSourceForPrisma(commentData.source),
             slackTs: commentData.slackMessageTs || null,
-            slackChannelId: commentData.slackChannelId || null
+            slackChannelId: commentData.slackChannelId || null,
+            userId: resolvedUser ? resolvedUser.id : null,
+            authorName: authorName
         }
     });
     return {
         id: created.id,
         taskId: created.taskId,
-        user: commentData.user || 'System',
+        user: created.authorName || created.userId || 'System',
         comment: created.content,
         timestamp: created.createdAt?.toISOString?.() || '',
         slackMessageTs: created.slackTs || '',
         slackChannelId: created.slackChannelId || '',
-        source: 'web'
+        source: mapSourceForLegacy(created.source)
     };
 }
 
@@ -335,7 +386,7 @@ async function addActivity(activity) {
             userId: null,
             action: activity.action,
             newValues: activity.details ? { details: activity.details } : undefined,
-            source: activity.source?.toLowerCase?.() === 'web' ? 'Web' : 'System'
+            source: mapSourceForPrisma(activity.source)
         }
     });
     return { ...activity, id: created.id };
@@ -555,6 +606,18 @@ function mapTypeToEnum(type) {
         'task': 'Task'
     };
     return map[normalized] || type;
+}
+
+function mapSourceForLegacy(source) {
+    if (!source) return 'web';
+    return source.toLowerCase();
+}
+
+function mapSourceForPrisma(source) {
+    if (!source) return 'Web';
+    const value = source.toLowerCase();
+    if (value === 'slack') return 'Slack';
+    return 'Web';
 }
 
 module.exports = {

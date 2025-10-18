@@ -5,6 +5,7 @@ const cron = require('node-cron');
 const db = require('./dbAdapter');
 const { getFrontendBaseUrl } = require('../config/appConfig');
 const ScrumMasterFeatures = require('./scrumMasterFeatures');
+const googleSheets = require('./googleSheets');
 
 class SlackService {
     constructor() {
@@ -418,6 +419,7 @@ class SlackService {
         await db.addComment({
             taskId: task.id,
             user: createdBy ? createdBy.name : 'Slack User',
+            userEmail: createdBy ? createdBy.email : null,
             comment: `Task created from Slack mention in thread ${threadTs}`
         });
         // Log activity
@@ -465,7 +467,7 @@ class SlackService {
                 if (m.bot_id || m.subtype === 'bot_message') continue;
                 const user = await this.getUserBySlackId(m.user);
                 // Only add as comment if it's not the creator message
-                await googleSheetsService.addComment({
+                await googleSheets.addComment({
                     taskId: task.id,
                     user: user ? user.name : 'Slack User',
                     comment: m.text,
@@ -474,7 +476,7 @@ class SlackService {
                     slackChannelId: channelId
                 });
                 try {
-                    await googleSheetsService.addActivity({
+                    await googleSheets.addActivity({
                         taskId: task.id,
                         user: user ? user.name : 'Slack User',
                         action: 'commented',
@@ -524,6 +526,7 @@ class SlackService {
             await db.addComment({
                 taskId: resolvedTaskId,
                 user: userName,
+                userEmail: user?.email || null,
                 comment: event.text,
                 source: 'slack',
                 slackMessageTs: event.ts,
@@ -550,6 +553,12 @@ class SlackService {
                 console.warn('Slack client not initialized; skipping task thread post');
                 return { channel: null, thread_ts: null };
             }
+
+            if (!task || !task.task) {
+                console.warn('Invalid task data for Slack thread creation:', task);
+                return { channel: null, thread_ts: null };
+            }
+
             const channel = process.env.SLACK_TASKS_CHANNEL || process.env.SLACK_NOTIFICATIONS_CHANNEL || '#eng-sprint';
             const result = await this.client.chat.postMessage({
                 channel: channel,
@@ -557,31 +566,88 @@ class SlackService {
                 blocks: this.buildTaskCreatedBlocks(task)
             });
 
-            if (result && result.ts) {
+            if (result && result.ts && result.channel) {
                 this.threadToTaskMap.set(result.ts, task.id);
                 this.threadTimestamps.set(result.ts, Date.now());
+                console.log('Successfully created Slack thread for task:', { taskId: task.id, channel: result.channel, thread_ts: result.ts });
+                return { channel: result.channel, thread_ts: result.ts };
+            } else {
+                console.warn('Slack postMessage for task creation returned incomplete result:', result);
+                return { channel: channel, thread_ts: null };
             }
-
-            return { channel: result.channel, thread_ts: result.ts };
         } catch (error) {
             console.error('Error posting task created thread:', error);
-            throw error;
+            // Don't throw error - let task creation continue even if Slack fails
+            return { channel: null, thread_ts: null };
+        }
+    }
+
+    async getSlackUserIdByEmail(email) {
+        if (!email || !this.client) return null;
+
+        // Check cache first
+        for (const [slackId, cachedEmail] of this.userEmailMap.entries()) {
+            // Handle both string and object formats in the cache
+            const cachedEmailStr = typeof cachedEmail === 'string' ? cachedEmail : cachedEmail.email;
+            if (cachedEmailStr && cachedEmailStr.toLowerCase() === email.toLowerCase()) {
+                return slackId;
+            }
+        }
+
+        try {
+            const result = await this.client.users.lookupByEmail({ email });
+            const slackId = result?.user?.id || null;
+            if (slackId) {
+                // Store complete user object in cache for consistency
+                const userInfo = {
+                    email: email,
+                    name: result.user?.name || email,
+                    role: result.user?.profile?.title || ''
+                };
+                this.userEmailMap.set(slackId, userInfo);
+            }
+            return slackId;
+        } catch (error) {
+            if (error.data?.error === 'users_not_found') {
+                console.warn(`Slack user not found for email: ${email}`);
+            } else {
+                console.error('Error looking up Slack user by email:', error);
+            }
+            return null;
         }
     }
 
     // Post a comment to an existing Slack thread, return message ts
     async postCommentToThread(channelId, threadTs, text) {
         try {
+            if (!this.client) {
+                console.warn('Slack client not initialized; skipping comment thread post');
+                return null;
+            }
+
+            if (!channelId || !threadTs) {
+                console.warn('Missing channelId or threadTs for Slack comment post:', { channelId, threadTs });
+                return null;
+            }
+
             const result = await this.client.chat.postMessage({
                 channel: channelId,
                 thread_ts: threadTs,
                 text,
                 mrkdwn: true
             });
-            return result.ts;
+
+            if (result && result.ts) {
+                console.log('Successfully posted comment to Slack thread:', { channelId, threadTs, messageTs: result.ts });
+                return result.ts;
+            } else {
+                console.warn('Slack postMessage returned no timestamp:', result);
+                return null;
+            }
         } catch (error) {
             console.error('Error posting comment to Slack thread:', error);
-            throw error;
+            // Don't throw error - let comment creation continue even if Slack fails
+            return null;
         }
     }
 
@@ -825,7 +891,7 @@ class SlackService {
 
     async handleBacklogCommand(args, respond) {
         try {
-            const tasks = await googleSheetsService.getTasks();
+            const tasks = await googleSheets.getTasks();
             const backlog = tasks.filter(t => (t.priority === 'Backlog' || t.status === 'Not started')).slice(0, 10);
             if (backlog.length === 0) return respond({ text: 'No backlog items found.', response_type: 'ephemeral' });
             const lines = backlog.map(t => `• ${t.id}: ${t.task} [${t.status}]`).join('\n');
@@ -1076,9 +1142,9 @@ class SlackService {
 
     async generateDailyStandupReport() {
         try {
-            const tasks = await googleSheetsService.getTasks();
-            const users = await googleSheetsService.getUsers();
-            const sprints = await googleSheetsService.getSprints();
+            const tasks = await googleSheets.getTasks();
+            const users = await googleSheets.getUsers();
+            const sprints = await googleSheets.getSprints();
             
             const activeSprint = sprints.find(s => s.status === 'Active');
             if (!activeSprint) return;
@@ -1102,8 +1168,8 @@ class SlackService {
 
     async generateSprintHealthAlert() {
         try {
-            const tasks = await googleSheetsService.getTasks();
-            const sprints = await googleSheetsService.getSprints();
+            const tasks = await googleSheets.getTasks();
+            const sprints = await googleSheets.getSprints();
             
             const activeSprint = sprints.find(s => s.status === 'Active');
             if (!activeSprint) return;
@@ -1208,7 +1274,16 @@ class SlackService {
 
     async initializeUserMapping() {
         try {
-            const users = await googleSheetsService.getUsers();
+            let users = [];
+            try {
+                if (process.env.DB_TYPE && process.env.DB_TYPE.toLowerCase() === 'mysql') {
+                    users = await db.getUsers();
+                } else if (typeof googleSheets !== 'undefined') {
+                    users = await googleSheets.getUsers();
+                }
+            } catch (err) {
+                console.warn('Could not load users for Slack mapping:', err.message);
+            }
             
             // Get Slack workspace members
             const slackUsers = await this.client.users.list();
@@ -1217,14 +1292,20 @@ class SlackService {
             for (const slackUser of slackUsers.members) {
                 if (slackUser.profile && slackUser.profile.email) {
                     const email = slackUser.profile.email.toLowerCase();
-                    const kiraUser = users.find(u => u.email.toLowerCase() === email);
+                    const kiraUser = users.find(u => (u.email || '').toLowerCase() === email);
                     
                     if (kiraUser) {
                         this.userEmailMap.set(slackUser.id, {
                             email: kiraUser.email,
-                            name: kiraUser.name,
-                            role: kiraUser.role
+                            name: kiraUser.name || slackUser.profile.real_name || email,
+                            role: kiraUser.role || slackUser.profile.title || ''
                         });
+                } else {
+                    this.userEmailMap.set(slackUser.id, {
+                        email,
+                        name: slackUser.profile.real_name || email,
+                        role: slackUser.profile.title || ''
+                    });
                     }
                 }
             }

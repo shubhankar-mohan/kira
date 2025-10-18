@@ -152,7 +152,8 @@ class EventHandlerManager {
                 'clearComment',
                 'closeTaskModal',
                 'toggleCurrentSprint',
-                'toggleCurrentSprintFilter'
+                'toggleCurrentSprintFilter',
+                'switchTaskTab'
             ]);
 
             if (modalManagedActions.has(action)) {

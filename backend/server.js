@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
 const path = require('path'); // Added for path.join
 const { getFrontendBaseUrl } = require('./config/appConfig');
 
@@ -24,110 +23,29 @@ app.set('trust proxy', 1);
 // Lazy import to avoid crash before Prisma is generated
 const prisma = require('./db/prisma');
 
-// Security middleware with secure CSP
+// Security middleware with custom CSP
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            scriptSrcAttr: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"], // Required for dynamic styles
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            scriptSrcAttr: ["'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
             connectSrc: ["'self'"],
             fontSrc: ["'self'"],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             frameSrc: ["'none'"],
-            baseUri: ["'self'"],
-            formAction: ["'self'"],
         },
     },
-    crossOriginEmbedderPolicy: false // Disable for now if causing issues
 }));
 
-// CORS configuration - secure origins only
-const allowedOrigins = process.env.NODE_ENV === 'production'
-    ? (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean) || ['https://yourdomain.com']
-    : (process.env.FRONTEND_URL || 'http://localhost:3001').split(',').filter(Boolean);
-
+// CORS configuration - allow all origins in production
 app.use(cors({
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-
-        if (allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        } else {
-            return callback(new Error('Not allowed by CORS'), false);
-        }
-    },
-    credentials: true,
-    optionsSuccessStatus: 200
+    origin: process.env.NODE_ENV === 'production' ? true : (process.env.FRONTEND_URL || 'http://localhost:3001'),
+    credentials: true
 }));
-
-// Rate limiting - general API protection
-const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // limit each IP to 1000 requests per windowMs
-    message: {
-        error: 'Too many requests from this IP, please try again later.'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => req.path.startsWith('/health') // Skip rate limiting for health checks
-});
-
-// Apply rate limiting to all API routes
-app.use('/api/', apiLimiter);
-
-// Apply input validation to API routes (except Slack webhook which needs raw body)
-app.use('/api/', (req, res, next) => {
-    if (req.path.startsWith('/api/slack')) {
-        return next();
-    }
-    validateInput(req, res, next);
-});
-
-// Strict rate limiting for auth endpoints
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // limit each IP to 5 auth requests per windowMs
-    message: {
-        error: 'Too many authentication attempts, please try again later.'
-    },
-    standardHeaders: true,
-    legacyHeaders: false
-});
-
-app.use('/api/auth', authLimiter);
-
-// Input validation middleware
-const validateInput = (req, res, next) => {
-    // Basic input sanitization
-    const sanitizeString = (str) => {
-        if (typeof str !== 'string') return str;
-        return str.trim().replace(/[<>\"'&]/g, '');
-    };
-
-    // Sanitize common fields
-    if (req.body) {
-        for (const [key, value] of Object.entries(req.body)) {
-            if (typeof value === 'string') {
-                req.body[key] = sanitizeString(value);
-            }
-        }
-    }
-
-    if (req.query) {
-        for (const [key, value] of Object.entries(req.query)) {
-            if (typeof value === 'string') {
-                req.query[key] = sanitizeString(value);
-            }
-        }
-    }
-
-    next();
-};
 
 // Logging middleware
 app.use(morgan('combined'));

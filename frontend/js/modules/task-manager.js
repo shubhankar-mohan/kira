@@ -25,6 +25,8 @@ class TaskManager {
             sprint: [],
             assignee: [],
             assignedBy: [],
+            createdBy: '',
+            tags: [],
             search: '',
             createdFrom: '',
             createdBefore: '',
@@ -198,17 +200,14 @@ class TaskManager {
                     window.taskBoardManager.populateFilters();
                 }
                 if (window.modalManager) {
-                    window.modalManager.closeModal('createTaskModal');
+                    window.modalManager.closeModal('createTaskModal', { force: true });
                 }
-                if (window.uiManager) {
-                    window.uiManager.showNotification('Task created successfully!', 'success');
-                }
+                return { success: true };
             }
+            return { success: false, error: response.error || 'Failed to create task.' };
         } catch (error) {
             console.error('Error creating task:', error);
-            if (window.uiManager) {
-                window.uiManager.showNotification('Failed to create task.', 'error');
-            }
+            return { success: false, error };
         }
     }
 
@@ -517,25 +516,30 @@ class TaskManager {
     }
 
     async showCreateTaskModal() {
-        // Ensure users and sprints are loaded before opening modal
-        if (!this.users || this.users.length === 0) {
-            console.log('Loading users before opening create task modal...');
-            await this.loadUsers();
-        }
-        if (!this.sprints || this.sprints.length === 0) {
-            console.log('Loading sprints before opening create task modal...');
-            await this.loadSprints();
-        }
-        
-        if (window.modalManager) {
-            window.modalManager.showModal('createTaskModal');
-            // Hydrate fields with safe defaults to avoid empty modal feel
-            const title = document.getElementById('taskTitle');
-            const priority = document.getElementById('taskPriority');
-            const type = document.getElementById('taskType');
-            const sprint = document.getElementById('taskSprint');
-            if (title && !title.value) title.value = '';
-            if (priority && !priority.value) priority.value = 'P2';
+        try {
+            console.log('🎯 Opening create task modal...');
+
+            // Ensure users and sprints are loaded before opening modal
+            if (!this.users || this.users.length === 0) {
+                console.log('Loading users before opening create task modal...');
+                await this.loadUsers();
+            }
+            if (!this.sprints || this.sprints.length === 0) {
+                console.log('Loading sprints before opening create task modal...');
+                await this.loadSprints();
+            }
+
+            console.log('✅ Data loaded, opening modal. Users:', this.users?.length || 0, 'Sprints:', this.sprints?.length || 0);
+
+            if (window.modalManager) {
+                window.modalManager.showModal('createTaskModal');
+                // Hydrate fields with safe defaults to avoid empty modal feel
+                const title = document.getElementById('taskTitle');
+                const priority = document.getElementById('taskPriority');
+                const type = document.getElementById('taskType');
+                const sprint = document.getElementById('taskSprint');
+                if (title && !title.value) title.value = '';
+                if (priority && !priority.value) priority.value = 'P2';
             if (type && !type.value) type.value = 'Feature';
             if (sprint && sprint.options.length === 0) {
                 const opt = document.createElement('option');
@@ -543,6 +547,15 @@ class TaskManager {
                 opt.textContent = 'No Sprint';
                 sprint.appendChild(opt);
             }
+
+                console.log('🎉 Create task modal opened successfully');
+            } else {
+                console.error('❌ ModalManager not available');
+                this.showNotification('Modal system not available', 'error');
+            }
+        } catch (error) {
+            console.error('❌ Error opening create task modal:', error);
+            this.showNotification('Failed to open create task modal', 'error');
         }
     }
 
@@ -566,10 +579,17 @@ class TaskManager {
             priority: document.getElementById('taskPriority').value,
             type: document.getElementById('taskType').value,
             sprintWeek: document.getElementById('taskSprint').value,
-            status: 'Not started' // Ensure default status is "Not started"
+            status: 'Not started', // Ensure default status is "Not started"
+            createdBy: window.authManager?.currentUser?.email || window.authManager?.currentUser?.name || 'Dashboard User'
         };
 
-        await this.createTaskApi(formData);
+        this.showLoading();
+        try {
+            const result = await this.createTaskApi(formData);
+            return result;
+        } finally {
+            this.hideLoading();
+        }
     }
 
     async createSprint() {
@@ -602,9 +622,64 @@ class TaskManager {
     }
 
     async sendSlackTaskUpdate(taskId, taskData) {
-        // Mock Slack notification - in real app, this would send to Slack
-        console.log('Slack notification for task update:', taskId, taskData);
-        return Promise.resolve({ success: true });
+        try {
+            const currentUser = window.authManager?.currentUser?.name || 'Unknown User';
+            const originalTask = this.tasks.find((t) => t.id === taskId);
+            const changes = {};
+
+            if (originalTask) {
+                if (taskData.status !== undefined && taskData.status !== originalTask.status) {
+                    changes.status = taskData.status;
+                }
+                if (taskData.priority !== undefined && taskData.priority !== originalTask.priority) {
+                    changes.priority = taskData.priority;
+                }
+                if (taskData.assignedTo !== undefined && taskData.assignedTo !== originalTask.assignedTo) {
+                    changes.assignedTo = taskData.assignedTo;
+                }
+                if (taskData.description !== undefined && taskData.description !== originalTask.description) {
+                    changes.description = true;
+                }
+                if (taskData.sprintWeek !== undefined && taskData.sprintWeek !== originalTask.sprintWeek) {
+                    changes.sprintWeek = taskData.sprintWeek;
+                }
+                if (taskData.statusReason !== undefined && taskData.statusReason !== originalTask.statusReason) {
+                    changes.statusReason = taskData.statusReason;
+                }
+            }
+
+            if (Object.keys(changes).length === 0) {
+                return { success: true, skipped: true };
+            }
+
+            const threadTs = originalTask?.slackThread?.threadTs || originalTask?.slackThreadId;
+            const channelId = originalTask?.slackThread?.channelId || originalTask?.slackChannelId;
+
+            const response = await api.sendTaskUpdateNotification(
+                taskId,
+                taskData.task || originalTask?.task || 'Task Updated',
+                currentUser,
+                changes,
+                threadTs,
+                channelId
+            );
+
+            if (response?.success && response.data) {
+                const updatedTask = this.tasks.find((t) => t.id === taskId);
+                if (updatedTask) {
+                    updatedTask.slackThreadId = response.data.threadTs || threadTs || updatedTask.slackThreadId;
+                    updatedTask.slackChannelId = response.data.channelId || channelId || updatedTask.slackChannelId;
+                    updatedTask.slackThread = updatedTask.slackThread || {};
+                    updatedTask.slackThread.threadTs = updatedTask.slackThread.threadTs || updatedTask.slackThreadId;
+                    updatedTask.slackThread.channelId = updatedTask.slackThread.channelId || updatedTask.slackChannelId;
+                }
+            }
+
+            return response;
+        } catch (error) {
+            console.error('Failed to send Slack task update notification:', error);
+            return { success: false, error: error.message };
+        }
     }
 
     buildTaskQueryPayload(overrides = {}) {
@@ -617,6 +692,8 @@ class TaskManager {
             sprint,
             assignee,
             assignedBy,
+            createdBy,
+            tags,
             search,
             createdFrom,
             createdBefore,
@@ -637,8 +714,22 @@ class TaskManager {
             type,
             sprint,
             assignee,
-            assignedBy
+            assignedBy,
+            createdBy,
+            tags
         };
+
+        // Map assignedBy -> createdBy when we have an email (backend expects createdBy)
+        if (!payload.createdBy && payload.assignedBy) {
+            if (Array.isArray(payload.assignedBy)) {
+                const emailCandidate = payload.assignedBy.find((value) => typeof value === 'string' && value.includes('@'));
+                if (emailCandidate) payload.createdBy = emailCandidate;
+            } else if (typeof payload.assignedBy === 'string' && payload.assignedBy.includes('@')) {
+                payload.createdBy = payload.assignedBy;
+            }
+        }
+        // Remove assignedBy from payload as backend doesn't support it directly
+        delete payload.assignedBy;
 
         Object.keys(payload).forEach((key) => {
             const value = payload[key];
