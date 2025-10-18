@@ -129,7 +129,7 @@ router.get('/:id/tasks', async (req, res) => {
             });
         }
 
-        const tasks = await googleSheets.getTasks();
+        const tasks = await db.getTasks();
         const userTasks = tasks.filter(task => 
             task.assignedTo && task.assignedTo.includes(user.email)
         );
@@ -172,19 +172,19 @@ router.put('/:id', async (req, res) => {
         const userId = req.params.id;
         const updateData = req.body;
 
-        const users = await googleSheets.getUsers();
-        const userIndex = users.findIndex(u => u.id === userId || u.email === userId);
+        // Validate user exists first
+        const users = await db.getUsers();
+        const existingUser = users.find(u => u.id === userId || u.email === userId);
         
-        if (userIndex === -1) {
+        if (!existingUser) {
             return res.status(404).json({ 
                 success: false, 
                 error: 'User not found' 
             });
         }
 
-        // Update user data
-        const updatedUser = { ...users[userIndex], ...updateData };
-        const result = await db.updateUser(userId, updatedUser);
+        // Update user data via dbAdapter
+        const result = await db.updateUser(userId, updateData);
         
         // Remove password hash from response
         const safeUser = {

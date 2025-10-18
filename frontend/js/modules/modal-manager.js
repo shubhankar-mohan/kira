@@ -286,9 +286,12 @@ class ModalManager {
                 this.saveUserDetails();
                 break;
             case 'deleteUser':
-                const userIdToDelete = event.target.dataset.userId;
+                const deleteButton = event.target.closest('[data-action="deleteUser"]');
+                const userIdToDelete = deleteButton?.dataset.userId;
                 if (userIdToDelete) {
                     this.deleteUser(userIdToDelete);
+                } else {
+                    console.error('Delete user: No userId found on button');
                 }
                 break;
         }
@@ -387,6 +390,12 @@ class ModalManager {
 
     async saveUserDetails() {
         if (!this.currentUserId) return;
+        
+        // Prevent duplicate submissions
+        if (this.isSavingUser) {
+            console.log('⚠️ Already saving user, ignoring duplicate call');
+            return;
+        }
 
         const userData = {
             name: document.getElementById('userDetailName').value,
@@ -398,6 +407,7 @@ class ModalManager {
         };
 
         try {
+            this.isSavingUser = true;
             window.uiManager.showLoading();
             const response = await api.updateUser(this.currentUserId, userData);
             
@@ -420,20 +430,39 @@ class ModalManager {
             console.error('Error updating user:', error);
             window.uiManager.showNotification('Failed to update user', 'error');
         } finally {
+            this.isSavingUser = false;
             window.uiManager.hideLoading();
         }
     }
 
     async deleteUser(userId) {
-        if (!userId || !confirm('Are you sure you want to delete this user?')) return;
+        if (!userId) {
+            console.error('Delete user: No userId provided');
+            return;
+        }
+        
+        if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+            return;
+        }
+        
+        // Prevent duplicate submissions
+        if (this.isDeletingUser) {
+            console.log('⚠️ Already deleting user, ignoring duplicate call');
+            return;
+        }
 
         try {
+            this.isDeletingUser = true;
             window.uiManager.showLoading();
             const response = await api.deleteUser(userId);
             
             if (response.success) {
-                // Remove from local data
-                window.taskManager.users = window.taskManager.users.filter(u => (u.id || u.email) !== userId);
+                // Remove from local data - check both id and email since userId could be either
+                const beforeCount = window.taskManager.users.length;
+                window.taskManager.users = window.taskManager.users.filter(u => u.id !== userId && u.email !== userId);
+                const afterCount = window.taskManager.users.length;
+                
+                console.log(`🗑️ User deleted. Before: ${beforeCount}, After: ${afterCount}, Removed: ${beforeCount - afterCount}`);
                 
                 window.uiManager.showNotification('User deleted successfully!', 'success');
                 this.closeModal('userDetailsModal');
@@ -447,6 +476,7 @@ class ModalManager {
             console.error('Error deleting user:', error);
             window.uiManager.showNotification('Failed to delete user', 'error');
         } finally {
+            this.isDeletingUser = false;
             window.uiManager.hideLoading();
         }
     }
@@ -660,12 +690,19 @@ class ModalManager {
     }
 
     async handleCreateTask() {
+        // Prevent duplicate submissions
+        if (this.isCreatingTask) {
+            console.warn('Task creation already in progress, ignoring duplicate request');
+            return;
+        }
+        
         if (!this.validateCreateTaskForm()) return;
 
         const createBtn = document.querySelector('#createTaskModal [data-action="createTask"]');
         const originalContent = createBtn ? createBtn.innerHTML : null;
 
         try {
+            this.isCreatingTask = true;
             this.setButtonLoadingState(createBtn, 'Creating...');
             const result = await window.taskManager.createTask();
             if (!result?.success) {
@@ -675,11 +712,18 @@ class ModalManager {
             }
             window.uiManager?.showNotification('Task created successfully!', 'success');
         } finally {
+            this.isCreatingTask = false;
             this.resetButtonState(createBtn, originalContent);
         }
     }
 
     handleSaveTaskDetails() {
+        // Prevent duplicate submissions
+        if (this.isSavingTask) {
+            console.warn('Task save already in progress, ignoring duplicate request');
+            return;
+        }
+        
         if (!this.validateTaskDetailForm()) {
             return;
         }
@@ -687,6 +731,7 @@ class ModalManager {
         const saveBtn = document.querySelector('#taskDetailsModal .task-btn-primary');
         const originalContent = saveBtn ? saveBtn.innerHTML : null;
 
+        this.isSavingTask = true;
         this.setButtonLoadingState(saveBtn, 'Saving...');
 
         this.saveTaskDetails()
@@ -694,6 +739,7 @@ class ModalManager {
                 console.error('saveTaskDetails failed:', error);
             })
             .finally(() => {
+                this.isSavingTask = false;
                 this.resetButtonState(saveBtn, originalContent);
             });
     }
@@ -817,11 +863,15 @@ class ModalManager {
                 return getWeekNumber(b) - getWeekNumber(a);
             });
 
-            // Add current sprints first (at top)
-            currentSprints.forEach(sprint => {
+            // Add current sprints first (at top) and auto-select if there's exactly one
+            currentSprints.forEach((sprint, index) => {
                 const option = document.createElement('option');
                 option.value = sprint.sprintWeek || sprint.name;
                 option.textContent = `🎯 ${sprint.sprintWeek || sprint.name} (Current)`;
+                // Auto-select current sprint if it's the only one
+                if (currentSprints.length === 1 && index === 0) {
+                    option.selected = true;
+                }
                 sprintSelect.appendChild(option);
             });
 
@@ -1073,14 +1123,20 @@ class ModalManager {
         };
 
         try {
-            window.taskManager.showLoading();
+            if (window.uiManager) {
+                window.uiManager.showLoading();
+            }
             const response = await api.updateTask(window.taskManager.currentTaskId, taskData);
             
-            if (response.success) {
-                // Update local task
+            if (response && response.success) {
+                // Update local task with the returned data
                 const taskIndex = window.taskManager.tasks.findIndex(t => t.id === window.taskManager.currentTaskId);
                 if (taskIndex !== -1) {
-                    window.taskManager.tasks[taskIndex] = { ...window.taskManager.tasks[taskIndex], ...taskData };
+                    // Merge with server response data to ensure we have the complete updated task
+                    window.taskManager.tasks[taskIndex] = { 
+                        ...window.taskManager.tasks[taskIndex], 
+                        ...response.data 
+                    };
                 }
                 
                 // Re-render board
@@ -1088,27 +1144,18 @@ class ModalManager {
                     window.taskBoardManager.renderTasks(window.taskManager.tasks);
                 }
                 
-                // Show success state
-                saveBtn.innerHTML = `
-                    <svg class="task-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="m9 12 2 2 4-4"></path>
-                        <circle cx="12" cy="12" r="10"></circle>
-                    </svg>
-                    Saved!
-                `;
-                saveBtn.style.background = 'var(--success)';
-                
-                // Reset button after delay
-                setTimeout(() => {
-                    saveBtn.disabled = false;
-                    saveBtn.innerHTML = originalContent;
-                    saveBtn.style.background = '';
-                }, 2000);
-                
-                window.taskManager.showNotification('Task updated successfully!', 'success');
+                if (window.uiManager) {
+                    window.uiManager.showNotification('Task updated successfully!', 'success');
+                }
                 
                 // Send Slack notification for task updates
-                await window.taskManager.sendSlackTaskUpdate(window.taskManager.currentTaskId, taskData);
+                if (window.taskManager && window.taskManager.sendSlackTaskUpdate) {
+                    try {
+                        await window.taskManager.sendSlackTaskUpdate(window.taskManager.currentTaskId, taskData);
+                    } catch (slackErr) {
+                        console.warn('Failed to send Slack notification:', slackErr);
+                    }
+                }
                 
                 // Clear localStorage
                 localStorage.removeItem('taskChanges');
@@ -1118,15 +1165,20 @@ class ModalManager {
                 }
                 
             } else {
-                window.taskManager.showNotification('Failed to update task: ' + response.error, 'error');
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = originalContent;
+                const errorMsg = response?.error || 'Failed to update task';
+                if (window.uiManager) {
+                    window.uiManager.showNotification('Failed to update task: ' + errorMsg, 'error');
+                }
             }
         } catch (error) {
             console.error('Error updating task:', error);
-            window.taskManager.showNotification('Error updating task', 'error');
+            if (window.uiManager) {
+                window.uiManager.showNotification('Error updating task: ' + error.message, 'error');
+            }
         } finally {
-            window.taskManager.hideLoading();
+            if (window.uiManager) {
+                window.uiManager.hideLoading();
+            }
         }
     }
 
@@ -1642,6 +1694,54 @@ class ModalManager {
         }
 
         return true;
+    }
+
+    generateUserPassword() {
+        const passwordField = document.getElementById('userPassword');
+        if (!passwordField) return;
+        
+        // Generate a secure random password
+        const length = 16;
+        const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+        let password = '';
+        const values = new Uint32Array(length);
+        window.crypto.getRandomValues(values);
+        
+        for (let i = 0; i < length; i++) {
+            password += charset[values[i] % charset.length];
+        }
+        
+        passwordField.value = password;
+        passwordField.removeAttribute('readonly');
+        
+        if (window.uiManager) {
+            window.uiManager.showNotification('Password generated successfully!', 'success');
+        }
+    }
+
+    async copyUserPassword() {
+        const passwordField = document.getElementById('userPassword');
+        if (!passwordField || !passwordField.value) {
+            if (window.uiManager) {
+                window.uiManager.showNotification('No password to copy. Generate one first.', 'error');
+            }
+            return;
+        }
+        
+        try {
+            await navigator.clipboard.writeText(passwordField.value);
+            if (window.uiManager) {
+                window.uiManager.showNotification('Password copied to clipboard!', 'success');
+            }
+        } catch (err) {
+            console.error('Failed to copy password:', err);
+            // Fallback for older browsers
+            passwordField.select();
+            document.execCommand('copy');
+            if (window.uiManager) {
+                window.uiManager.showNotification('Password copied to clipboard!', 'success');
+            }
+        }
     }
 }
 

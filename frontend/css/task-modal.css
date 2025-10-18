@@ -430,6 +430,41 @@
     margin-bottom: 0;
 }
 
+/* Metadata form inputs - used in user details modal */
+.task-metadata-input, .task-metadata-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--gray-200);
+    border-radius: 12px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background: white;
+    color: var(--gray-900);
+    box-sizing: border-box;
+}
+
+.task-metadata-input:focus, .task-metadata-select:focus {
+    outline: none;
+    border-color: var(--kirana-primary);
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+    transform: translateY(-1px);
+}
+
+.task-metadata-input:hover, .task-metadata-select:hover {
+    border-color: var(--gray-400);
+    box-shadow: var(--shadow-sm);
+}
+
+.task-metadata-select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 12px center;
+    background-repeat: no-repeat;
+    background-size: 16px;
+    padding-right: 40px;
+}
+
 .task-metadata-input.readonly {
     background: #f8fafc !important;
     cursor: not-allowed !important;
