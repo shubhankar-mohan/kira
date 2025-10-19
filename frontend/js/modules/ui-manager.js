@@ -141,48 +141,31 @@ class UIManager {
             }
             
             container.innerHTML = items.map((a) => {
-                const avatar = (a.user || 'U').toString().charAt(0).toUpperCase();
                 const timeAgo = this.formatTimeAgo(a.timestamp);
                 const taskId = a.taskShortId || a.taskId || '';
                 const taskTitle = this.escapeHtml(a.taskTitle || 'Untitled Task');
                 const action = a.action || '';
-                const taskStatus = a.taskStatus || '';
+                const userName = this.escapeHtml(a.user || 'User');
                 
-                // Determine activity type icon and color
-                let activityIcon = '📝';
-                let activityType = 'update';
+                // Simplify action text
+                let actionText = '';
                 if (action.toLowerCase().includes('created')) {
-                    activityIcon = '✨';
-                    activityType = 'created';
+                    actionText = `Created by ${userName}`;
                 } else if (action.toLowerCase().includes('status')) {
-                    activityIcon = '🔄';
-                    activityType = 'status';
+                    actionText = `Updated by ${userName}`;
+                } else {
+                    actionText = `Updated by ${userName}`;
                 }
                 
-                // Get status badge styling
-                const statusClass = this.getStatusClass(taskStatus);
-                
                 return `
-                    <div class="activity-card ${activityType}" data-task-id="${taskId}" onclick="window.router?.navigateToPage('task-detail', false, '${taskId}')">
-                        <div class="activity-indicator ${activityType}">
-                            <span class="activity-icon">${activityIcon}</span>
+                    <div class="activity-row" data-task-id="${taskId}" onclick="window.router?.navigateToPage('task-detail', false, '${taskId}')">
+                        <div class="activity-task">
+                            <span class="activity-task-id">${taskId}</span>
+                            <span class="activity-task-title">${taskTitle}</span>
                         </div>
-                        <div class="activity-details">
-                            <div class="activity-task-info">
-                                <span class="activity-task-id">${taskId}</span>
-                                <h4 class="activity-task-title">${taskTitle}</h4>
-                            </div>
-                            <div class="activity-meta">
-                                <div class="activity-user-info">
-                                    <div class="activity-avatar">${avatar}</div>
-                                    <span class="activity-user-name">${this.escapeHtml(a.user || 'User')}</span>
-                                </div>
-                                <span class="activity-time">${timeAgo}</span>
-                            </div>
-                            <div class="activity-action-text">
-                                ${this.escapeHtml(action)}
-                            </div>
-                            ${taskStatus ? `<span class="activity-status-badge ${statusClass}">${this.escapeHtml(taskStatus)}</span>` : ''}
+                        <div class="activity-info">
+                            <span class="activity-action">${actionText}</span>
+                            <span class="activity-time">${timeAgo}</span>
                         </div>
                     </div>
                 `;

@@ -123,15 +123,12 @@ class App {
     loadPageContent(page) {
         switch (page) {
             case 'dashboard':
-                // Ensure data is loaded before updating dashboard
-                if (!window.taskManager.tasks || window.taskManager.tasks.length === 0 || 
-                    !window.taskManager.users || window.taskManager.users.length === 0 || 
-                    !window.taskManager.sprints || window.taskManager.sprints.length === 0) {
-                    console.log('Dashboard: Data not available, loading...');
-                    this.loadInitialData();
-                } else {
-                    console.log('Dashboard: Data available, updating...');
-                    window.taskManager.updateDashboard();
+                // Just update dashboard with existing data - data is already loaded in init
+                console.log('Dashboard: Updating with existing data...');
+                window.taskManager.updateDashboard();
+                // Refresh recent activity widget
+                if (window.uiManager && typeof window.uiManager.renderRecentActivity === 'function') {
+                    window.uiManager.renderRecentActivity();
                 }
                 break;
             case 'board':
@@ -258,8 +255,6 @@ class App {
                                             <option value="Not started">Not Started</option>
                                             <option value="In progress">In Progress</option>
                                             <option value="Dev Testing">Dev Testing</option>
-                                            <option value="Product Testing">Product Testing</option>
-                                            <option value="Awaiting Release">Awaiting Release</option>
                                             <option value="Done">Done</option>
                                             <option value="Blocked - Product">Blocked - Product</option>
                                             <option value="Blocked - Engineering">Blocked - Engineering</option>

@@ -167,12 +167,13 @@ async function getTasksFiltered(params) {
     }
 
     // Prisma filtering
+    // Note: MySQL connector doesn't support mode: 'insensitive', but utf8mb4_unicode_ci collation is case-insensitive by default
     const where = {};
-    if (status) where.status = status;
-    if (priority) where.priority = priority;
-    if (type) where.type = type;
+    if (status) where.status = mapStatusToEnum(status) || status;
+    if (priority) where.priority = mapPriorityToEnum(priority) || priority;
+    if (type) where.type = mapTypeToEnum(type) || type;
     if (sprint) where.sprint = { is: { name: sprint } };
-    if (assignee) where.assignments = { some: { user: { email: { contains: assignee, mode: 'insensitive' } } } };
+    if (assignee) where.assignments = { some: { user: { email: { contains: assignee } } } };
     if (createdFrom) where.createdFrom = createdFrom;
     if (createdBy) where.createdBy = { is: { email: createdBy } };
     if (createdAfter || createdBefore) {
@@ -182,8 +183,8 @@ async function getTasksFiltered(params) {
     }
     if (search) {
         where.OR = [
-            { title: { contains: search, mode: 'insensitive' } },
-            { description: { contains: search, mode: 'insensitive' } },
+            { title: { contains: search } },
+            { description: { contains: search } },
         ];
     }
     if (tags) {
@@ -206,6 +207,8 @@ async function getTasksFiltered(params) {
     const take = Math.max(1, Math.min(Number(pageSize) || 20, 100));
     const skip = Math.max(0, ((Number(page) || 1) - 1) * take);
 
+    // Execute count and findMany in parallel
+    // Note: count() only accepts 'where' parameter - no select, no mode, no includes
     const [total, tasks] = await Promise.all([
         prisma.task.count({ where }),
         prisma.task.findMany({
@@ -279,17 +282,65 @@ async function updateTask(taskId, updates) {
     if (updates.type !== undefined) data.type = mapTypeToEnum(updates.type);
     if (updates.sprintPoints !== undefined) data.storyPoints = updates.sprintPoints;
     if (updates.tags !== undefined) data.tags = Array.isArray(updates.tags) ? updates.tags : (updates.tags ? JSON.stringify(updates.tags) : null);
-    // Skip sprint linkage unless explicit sprintId provided
-    if (updates.sprintId !== undefined) data.sprint = { connect: { id: updates.sprintId } };
+    
+    // Handle sprint linkage - support both sprintId and sprintWeek
+    if (updates.sprintId !== undefined) {
+        data.sprint = updates.sprintId ? { connect: { id: updates.sprintId } } : { disconnect: true };
+    } else if (updates.sprintWeek !== undefined) {
+        // Resolve sprintWeek to sprintId
+        if (updates.sprintWeek) {
+            const sprint = await prisma.sprint.findFirst({ where: { name: updates.sprintWeek } });
+            if (sprint) {
+                data.sprint = { connect: { id: sprint.id } };
+            }
+        } else {
+            data.sprint = { disconnect: true };
+        }
+    }
+    
     if (updates.dueDate !== undefined) data.dueDate = updates.dueDate ? new Date(updates.dueDate) : null;
     if (updates.slackThreadId !== undefined) data.slackThreadTs = updates.slackThreadId || null;
     if (updates.slackChannelId !== undefined) data.slackChannelId = updates.slackChannelId || null;
+    
     const updated = await prisma.task.update({
         where: { id: taskId },
         data,
         include: { sprint: true, createdBy: true, updatedBy: true, assignments: { include: { user: true } } }
     });
-    return mapTaskToLegacy(updated);
+    
+    // Handle assignee updates if provided
+    if (updates.assignedTo !== undefined) {
+        // Clear existing assignments
+        await prisma.taskAssignment.deleteMany({ where: { taskId, role: 'Assignee' } });
+        
+        // Add new assignments if provided
+        if (updates.assignedTo) {
+            const assigneeEmails = Array.isArray(updates.assignedTo) 
+                ? updates.assignedTo 
+                : String(updates.assignedTo).split(',').map(e => e.trim()).filter(Boolean);
+            
+            for (const email of assigneeEmails) {
+                const user = await prisma.user.findUnique({ where: { email } });
+                if (user) {
+                    await prisma.taskAssignment.create({
+                        data: {
+                            taskId,
+                            userId: user.id,
+                            role: 'Assignee'
+                        }
+                    });
+                }
+            }
+        }
+    }
+    
+    // Refetch to include updated assignments
+    const refreshed = await prisma.task.findUnique({
+        where: { id: taskId },
+        include: { sprint: true, createdBy: true, updatedBy: true, assignments: { include: { user: true } } }
+    });
+    
+    return mapTaskToLegacy(refreshed);
 }
 
 async function deleteTask(taskId) {
@@ -507,10 +558,11 @@ async function searchTasks(query, limit = 10) {
     const s = String(query || '').toLowerCase();
     return all.filter(t => (t.shortId||'').toLowerCase().includes(s) || (t.task||'').toLowerCase().includes(s) || (t.description||'').toLowerCase().includes(s)).slice(0, limit);
   }
+  // Note: MySQL utf8mb4_unicode_ci collation is case-insensitive by default, no need for mode
   const where = {
     OR: [
-      { title: { contains: query, mode: 'insensitive' } },
-      { description: { contains: query, mode: 'insensitive' } }
+      { title: { contains: query } },
+      { description: { contains: query } }
     ]
   };
   const tasks = await prisma.task.findMany({ where, orderBy: { createdAt: 'desc' }, take: Number(limit) || 10, include: { assignments: { include: { user: true } }, sprint: true, createdBy: true, updatedBy: true } });

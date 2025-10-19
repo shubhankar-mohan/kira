@@ -97,6 +97,22 @@ fi
 echo "🌱 Seeding database (demo users, baseline data)..."
 npm run prisma:seed || true
 
+# Check if port 3001 is already in use
+if lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo "⚠️  Port 3001 is already in use."
+    read -p "Kill existing process and restart? [y/N] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "🔄 Stopping existing process on port 3001..."
+        lsof -ti:3001 | xargs kill -9 2>/dev/null || true
+        sleep 2
+    else
+        echo "✅ Existing server is already running at http://localhost:3001"
+        echo "   Use 'lsof -ti:3001 | xargs kill' to stop it manually."
+        exit 0
+    fi
+fi
+
 # Start the single server (backend serves frontend)
 echo "🚀 Starting KiranaClub Task Manager on port 3001..."
 echo "🔄 Backend will serve frontend files with client-side routing"
