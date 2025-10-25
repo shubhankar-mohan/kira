@@ -33,6 +33,12 @@ class TaskBoardManager {
         };
         this.bulkSelection = new Set();
         this.pageSizeOptions = [10, 20, 50, 100];
+        
+        // Duplicate submission guards
+        this.isBulkUpdatingStatus = false;
+        this.isBulkAssigning = false;
+        this.isBulkDeleting = false;
+        
         this.init();
     }
 
@@ -57,9 +63,15 @@ class TaskBoardManager {
     setupSearch() {
         const searchBox = document.getElementById('taskSearchBox');
         if (searchBox) {
+            let searchTimeout;
             searchBox.addEventListener('input', (e) => {
                 this.searchTerm = e.target.value;
-                this.applyFilters();
+                
+                // Debounce search - wait 300ms after user stops typing
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.applyFilters();
+                }, 300);
             });
         }
     }
@@ -535,6 +547,9 @@ class TaskBoardManager {
         console.log('📋 Total tasks before filtering:', this.allTasks.length);
 
         if (!options.skipServer && window.taskManager) {
+            // Show loading state
+            this.showLoadingState();
+            
             const serverFilterUpdates = this.buildServerFilterPayload();
             window.taskManager.updateFiltersAndReload(serverFilterUpdates, { resetPage: true });
             return;
@@ -557,6 +572,20 @@ class TaskBoardManager {
         
         console.log('📋 Tasks after filtering:', this.filteredTasks.length);
         this.renderFilteredTasks();
+    }
+
+    // Show loading state while filters are being applied
+    showLoadingState() {
+        document.querySelectorAll('.column-content').forEach(content => {
+            content.innerHTML = `
+                <div class="column-loading-state">
+                    <svg class="loading-spinner" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                    </svg>
+                    <p>Loading tasks...</p>
+                </div>
+            `;
+        });
     }
 
     // Toggle current sprint filter
@@ -748,6 +777,12 @@ class TaskBoardManager {
             }
         });
 
+        // Show global empty state if no tasks at all
+        const totalTasks = this.filteredTasks.length;
+        if (totalTasks === 0) {
+            this.showEmptyState();
+        }
+
         // Render tasks in each column with sorting
         this.statusConfig.forEach(status => {
             const column = this.boardContainer.querySelector(`[data-status="${status.key}"]`);
@@ -762,10 +797,19 @@ class TaskBoardManager {
             const sortedTasks = this.sortTasksByPriorityAndDueDate(tasksByStatus[status.key]);
 
             // Add tasks
-            sortedTasks.forEach(task => {
-                const taskCard = this.createTaskCard(task);
-                content.appendChild(taskCard);
-            });
+            if (sortedTasks.length === 0 && totalTasks > 0) {
+                // Show empty state for this specific column
+                content.innerHTML = `
+                    <div class="column-empty-state">
+                        <p>No tasks</p>
+                    </div>
+                `;
+            } else {
+                sortedTasks.forEach(task => {
+                    const taskCard = this.createTaskCard(task);
+                    content.appendChild(taskCard);
+                });
+            }
 
             // Update task count
             const countElement = column.querySelector('.task-count');
@@ -773,6 +817,24 @@ class TaskBoardManager {
                 countElement.textContent = tasksByStatus[status.key].length;
             }
         });
+    }
+
+    // Show empty state when no tasks match filters
+    showEmptyState() {
+        const firstColumn = this.boardContainer.querySelector('.column');
+        if (firstColumn) {
+            const content = firstColumn.querySelector('.column-content');
+            content.innerHTML = `
+                <div class="board-empty-state">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        <path d="M9 12h6m-6 4h6"/>
+                    </svg>
+                    <h3>No Tasks Found</h3>
+                    <p>Try adjusting your filters or create a new task</p>
+                </div>
+            `;
+        }
     }
 
     // Sort tasks by priority and due date
@@ -1012,10 +1074,10 @@ class TaskBoardManager {
                 </div>
                 <div class="task-actions">
                     <input type="checkbox" class="task-select-checkbox" data-task-id="${task.id}" ${this.bulkSelection.has(task.id) ? 'checked' : ''}>
-                    <img src="assets/copy-icon.jpg" alt="Copy task path" class="copy-icon" data-action="copyTaskPath" data-task-id="${displayId}" title="Copy task path" style="cursor: pointer;">
+                    <img src="assets/copy-icon.jpg" alt="Copy task path" class="copy-icon" data-task-id="${displayId}" title="Copy task path" style="cursor: pointer;">
                 </div>
             </div>
-            <div class="task-title" data-action="openTaskDetails" data-task-id="${task.id}" style="cursor: pointer;">${this.escapeHtml(task.task || 'Untitled Task')}</div>
+            <div class="task-title" style="cursor: pointer;">${this.escapeHtml(task.task || 'Untitled Task')}</div>
             <div class="task-tags-section">
                 ${task.priority ? `<span class="task-tag priority-${task.priority.toLowerCase()}">${task.priority}</span>` : ''}
                 ${task.type ? `<span class="task-tag type-${task.type.toLowerCase()}">${task.type}</span>` : ''}
@@ -1031,16 +1093,29 @@ class TaskBoardManager {
             ` : ''}
         `;
 
-        // Add click handler to the entire card (excluding copy icon)
+        // Add click handler to the entire card
         card.addEventListener('click', async (e) => {
+            // Handle checkbox selection
             if (e.target.classList.contains('task-select-checkbox')) {
                 this.toggleBulkSelection(task.id, e.target.checked);
                 return;
             }
+            
+            // Handle copy icon
+            if (e.target.classList.contains('copy-icon')) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.copyTaskPath(displayId);
+                return;
+            }
+            
+            // Ignore clicks on pagination and bulk actions
             if (e.target.closest('.pagination-controls') || e.target.closest('.bulk-actions')) {
                 return;
             }
-            if (!e.target.closest('.task-actions') && !e.target.closest('.copy-icon')) {
+            
+            // Open task details for any other click
+            if (!e.target.closest('.task-actions')) {
                 e.preventDefault();
                 e.stopPropagation();
                 await openTaskDetails(task.id);
@@ -1158,6 +1233,57 @@ class TaskBoardManager {
         return 'default';
     }
 
+    // Copy task path to clipboard
+    copyTaskPath(taskId) {
+        const baseUrl = window.location.origin;
+        const taskPath = `${baseUrl}/task/${taskId}`;
+        
+        // Modern clipboard API
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(taskPath)
+                .then(() => {
+                    if (window.uiManager) {
+                        window.uiManager.showNotification('Task link copied to clipboard!', 'success');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to copy task path:', err);
+                    this.fallbackCopyTextToClipboard(taskPath);
+                });
+        } else {
+            // Fallback for older browsers
+            this.fallbackCopyTextToClipboard(taskPath);
+        }
+    }
+
+    // Fallback copy method for older browsers
+    fallbackCopyTextToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        textArea.style.top = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            const successful = document.execCommand('copy');
+            if (successful && window.uiManager) {
+                window.uiManager.showNotification('Task link copied to clipboard!', 'success');
+            } else if (!successful && window.uiManager) {
+                window.uiManager.showNotification('Failed to copy link', 'error');
+            }
+        } catch (err) {
+            console.error('Fallback: Could not copy text:', err);
+            if (window.uiManager) {
+                window.uiManager.showNotification('Failed to copy link', 'error');
+            }
+        }
+
+        document.body.removeChild(textArea);
+    }
+
     buildServerFilterPayload() {
         const payload = {};
 
@@ -1211,34 +1337,226 @@ class TaskBoardManager {
         }
     }
 
-    handleBulkStatus() {
-        if (!window.taskManager || this.bulkSelection.size === 0) return;
-        const status = prompt('Enter new status for selected tasks (e.g., In progress, Done, Blocked - Product):');
-        if (!status) return;
-        window.taskManager.bulkUpdateStatus(Array.from(this.bulkSelection), status).then(() => {
-            this.bulkSelection.clear();
-            this.updateBulkSelectionState();
+    // Custom modal for bulk status update
+    async showBulkStatusModal(statusOptions) {
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.className = 'confirm-modal-overlay';
+            modal.innerHTML = `
+                <div class="confirm-modal">
+                    <div class="confirm-modal-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                    </div>
+                    <div class="confirm-modal-content">
+                        <h3 class="confirm-modal-title">Update Status</h3>
+                        <p class="confirm-modal-message">Select new status for ${this.bulkSelection.size} task${this.bulkSelection.size > 1 ? 's' : ''}:</p>
+                        <select id="bulkStatusSelect" class="task-metadata-select" style="width: 100%; margin-top: 16px;">
+                            ${statusOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="confirm-modal-actions">
+                        <button class="confirm-btn confirm-btn-cancel" data-bulk-action="cancel">Cancel</button>
+                        <button class="confirm-btn confirm-btn-primary" data-bulk-action="confirm">Update Status</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            setTimeout(() => modal.classList.add('show'), 10);
+            
+            const cleanup = () => {
+                modal.classList.remove('show');
+                setTimeout(() => modal.remove(), 200);
+            };
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    cleanup();
+                    resolve(null);
+                }
+                
+                const action = e.target.closest('[data-bulk-action]')?.dataset.bulkAction;
+                if (action === 'cancel') {
+                    cleanup();
+                    resolve(null);
+                } else if (action === 'confirm') {
+                    const select = modal.querySelector('#bulkStatusSelect');
+                    cleanup();
+                    resolve(select.value);
+                }
+            });
         });
     }
 
-    handleBulkAssign() {
-        if (!window.taskManager || this.bulkSelection.size === 0) return;
-        const userEmail = prompt('Enter email of assignee:');
-        if (!userEmail) return;
-        const assignedBy = window.authManager?.currentUser?.email || '';
-        window.taskManager.bulkAssignTasks(Array.from(this.bulkSelection), userEmail, assignedBy).then(() => {
-            this.bulkSelection.clear();
-            this.updateBulkSelectionState();
+    // Custom modal for bulk assign
+    async showBulkAssignModal(users) {
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.className = 'confirm-modal-overlay';
+            modal.innerHTML = `
+                <div class="confirm-modal">
+                    <div class="confirm-modal-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                            <circle cx="8.5" cy="7" r="4" />
+                            <path d="M20 8v6M23 11h-6" />
+                        </svg>
+                    </div>
+                    <div class="confirm-modal-content">
+                        <h3 class="confirm-modal-title">Assign Tasks</h3>
+                        <p class="confirm-modal-message">Select assignee for ${this.bulkSelection.size} task${this.bulkSelection.size > 1 ? 's' : ''}:</p>
+                        <select id="bulkAssignSelect" class="task-metadata-select" style="width: 100%; margin-top: 16px;">
+                            <option value="">Select User</option>
+                            ${users.map(user => `<option value="${user.email}">${user.name || user.email}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="confirm-modal-actions">
+                        <button class="confirm-btn confirm-btn-cancel" data-bulk-action="cancel">Cancel</button>
+                        <button class="confirm-btn confirm-btn-primary" data-bulk-action="confirm">Assign Tasks</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            setTimeout(() => modal.classList.add('show'), 10);
+            
+            const cleanup = () => {
+                modal.classList.remove('show');
+                setTimeout(() => modal.remove(), 200);
+            };
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    cleanup();
+                    resolve(null);
+                }
+                
+                const action = e.target.closest('[data-bulk-action]')?.dataset.bulkAction;
+                if (action === 'cancel') {
+                    cleanup();
+                    resolve(null);
+                } else if (action === 'confirm') {
+                    const select = modal.querySelector('#bulkAssignSelect');
+                    if (!select.value) {
+                        alert('Please select a user');
+                        return;
+                    }
+                    cleanup();
+                    resolve(select.value);
+                }
+            });
         });
     }
 
-    handleBulkDelete() {
+    async handleBulkStatus() {
         if (!window.taskManager || this.bulkSelection.size === 0) return;
-        if (!confirm(`Delete ${this.bulkSelection.size} tasks? This cannot be undone.`)) return;
-        window.taskManager.bulkDeleteTasks(Array.from(this.bulkSelection)).then(() => {
+        
+        // Prevent duplicate submissions
+        if (this.isBulkUpdatingStatus) {
+            console.log('⚠️ Already updating status, ignoring duplicate call');
+            return;
+        }
+        
+        // Show custom modal with status dropdown
+        const statusOptions = this.statusConfig.map(s => ({
+            value: s.key,
+            label: s.label
+        }));
+        
+        const result = await this.showBulkStatusModal(statusOptions);
+        if (!result) return;
+        
+        try {
+            this.isBulkUpdatingStatus = true;
+            await window.taskManager.bulkUpdateStatus(Array.from(this.bulkSelection), result);
             this.bulkSelection.clear();
             this.updateBulkSelectionState();
+            if (window.uiManager) {
+                window.uiManager.showNotification(`Updated ${this.bulkSelection.size} tasks`, 'success');
+            }
+        } catch (error) {
+            console.error('Error updating bulk status:', error);
+            if (window.uiManager) {
+                window.uiManager.showNotification('Failed to update tasks', 'error');
+            }
+        } finally {
+            this.isBulkUpdatingStatus = false;
+        }
+    }
+
+    async handleBulkAssign() {
+        if (!window.taskManager || this.bulkSelection.size === 0) return;
+        
+        // Prevent duplicate submissions
+        if (this.isBulkAssigning) {
+            console.log('⚠️ Already assigning tasks, ignoring duplicate call');
+            return;
+        }
+        
+        // Show custom modal with user dropdown
+        const users = window.taskManager?.users || [];
+        const result = await this.showBulkAssignModal(users);
+        if (!result) return;
+        
+        try {
+            this.isBulkAssigning = true;
+            const assignedBy = window.authManager?.currentUser?.email || '';
+            await window.taskManager.bulkAssignTasks(Array.from(this.bulkSelection), result, assignedBy);
+            this.bulkSelection.clear();
+            this.updateBulkSelectionState();
+            if (window.uiManager) {
+                window.uiManager.showNotification(`Assigned ${this.bulkSelection.size} tasks`, 'success');
+            }
+        } catch (error) {
+            console.error('Error bulk assigning tasks:', error);
+            if (window.uiManager) {
+                window.uiManager.showNotification('Failed to assign tasks', 'error');
+            }
+        } finally {
+            this.isBulkAssigning = false;
+        }
+    }
+
+    async handleBulkDelete() {
+        if (!window.taskManager || this.bulkSelection.size === 0) return;
+        
+        // Prevent duplicate submissions
+        if (this.isBulkDeleting) {
+            console.log('⚠️ Already deleting tasks, ignoring duplicate call');
+            return;
+        }
+        
+        // Show custom confirmation modal
+        const confirmed = await window.modalManager.showConfirm({
+            title: 'Delete Tasks',
+            message: `Are you sure you want to delete ${this.bulkSelection.size} task${this.bulkSelection.size > 1 ? 's' : ''}? This action cannot be undone.`,
+            confirmText: 'Delete Tasks',
+            cancelText: 'Cancel',
+            type: 'danger',
+            icon: 'delete'
         });
+        
+        if (!confirmed) return;
+        
+        try {
+            this.isBulkDeleting = true;
+            await window.taskManager.bulkDeleteTasks(Array.from(this.bulkSelection));
+            const count = this.bulkSelection.size;
+            this.bulkSelection.clear();
+            this.updateBulkSelectionState();
+            if (window.uiManager) {
+                window.uiManager.showNotification(`Deleted ${count} task${count > 1 ? 's' : ''}`, 'success');
+            }
+        } catch (error) {
+            console.error('Error bulk deleting tasks:', error);
+            if (window.uiManager) {
+                window.uiManager.showNotification('Failed to delete tasks', 'error');
+            }
+        } finally {
+            this.isBulkDeleting = false;
+        }
     }
 }
 

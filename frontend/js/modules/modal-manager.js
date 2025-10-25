@@ -1118,7 +1118,22 @@ class ModalManager {
             // Check for unsaved changes in create task modal
             if (!force && modalId === 'createTaskModal') {
                 const hasChanges = this.hasUnsavedFormChanges(modalId) || modal.dataset.dirty === 'true';
-                if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to close?')) {
+                if (hasChanges) {
+                    this.showConfirm({
+                        title: 'Unsaved Changes',
+                        message: 'You have unsaved changes. Are you sure you want to close?',
+                        confirmText: 'Close Anyway',
+                        cancelText: 'Keep Editing',
+                        type: 'warning',
+                        icon: 'warning'
+                    }).then(confirmed => {
+                        if (confirmed) {
+                            modal.style.display = 'none';
+                            modal.classList.remove('show');
+                            this.clearCreateTaskForm();
+                            delete modal.dataset.dirty;
+                        }
+                    });
                     return;
                 }
             }
@@ -1683,8 +1698,17 @@ class ModalManager {
         textarea.style.height = 'auto';
     }
 
-    deleteTask() {
-        if (confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
+    async deleteTask() {
+        const confirmed = await this.showConfirm({
+            title: 'Delete Task',
+            message: 'Are you sure you want to delete this task? This action cannot be undone.',
+            confirmText: 'Delete Task',
+            cancelText: 'Cancel',
+            type: 'danger',
+            icon: 'delete'
+        });
+        
+        if (confirmed) {
             const deleteBtn = document.querySelector('.task-btn-danger');
             deleteBtn.disabled = true;
             deleteBtn.innerHTML = `
@@ -1701,13 +1725,24 @@ class ModalManager {
         }
     }
 
-    closeTaskModal() {
+    async closeTaskModal() {
         const modal = document.getElementById('taskDetailsModal');
         if (modal) {
             // Check for unsaved changes
             const hasChanges = modal.dataset.dirty === 'true' || localStorage.getItem('taskChanges');
-            if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to close?')) {
-                return;
+            if (hasChanges) {
+                const confirmed = await this.showConfirm({
+                    title: 'Unsaved Changes',
+                    message: 'You have unsaved changes. Are you sure you want to close?',
+                    confirmText: 'Close Anyway',
+                    cancelText: 'Keep Editing',
+                    type: 'warning',
+                    icon: 'warning'
+                });
+                
+                if (!confirmed) {
+                    return;
+                }
             }
             
             // Add close animation
