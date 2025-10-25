@@ -236,10 +236,17 @@ async function createTask(taskData) {
         ? { connect: { email: taskData.createdByEmail } }
         : undefined;
 
-    // For now, link sprint only if an explicit sprintId is provided
-    const sprintRelation = taskData.sprintId
-        ? { connect: { id: taskData.sprintId } }
-        : undefined;
+    // Resolve sprint - support both sprintId and sprintWeek
+    let sprintRelation = undefined;
+    if (taskData.sprintId) {
+        sprintRelation = { connect: { id: taskData.sprintId } };
+    } else if (taskData.sprintWeek) {
+        // Resolve sprintWeek (sprint name) to sprint ID
+        const sprint = await prisma.sprint.findFirst({ where: { name: taskData.sprintWeek } });
+        if (sprint) {
+            sprintRelation = { connect: { id: sprint.id } };
+        }
+    }
 
     const normalizedStatus = mapStatusToEnum(taskData.status) || 'PENDING';
     const normalizedPriority = mapPriorityToEnum(taskData.priority) || 'BACKLOG';
@@ -270,7 +277,35 @@ async function createTask(taskData) {
         },
         include: { sprint: true, createdBy: true, updatedBy: true, assignments: { include: { user: true } } }
     });
-    return mapTaskToLegacy(created);
+    
+    // Handle assignedTo - create task assignments
+    if (taskData.assignedTo) {
+        const assignees = String(taskData.assignedTo).split(',').map(e => e.trim()).filter(Boolean);
+        for (const userEmail of assignees) {
+            try {
+                const user = await prisma.user.findUnique({ where: { email: userEmail } });
+                if (user) {
+                    await prisma.taskAssignment.create({
+                        data: {
+                            taskId: created.id,
+                            userId: user.id,
+                            role: 'Assignee'
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error(`Failed to assign task to ${userEmail}:`, err.message);
+            }
+        }
+    }
+    
+    // Fetch task with assignments
+    const taskWithAssignments = await prisma.task.findUnique({
+        where: { id: created.id },
+        include: { sprint: true, createdBy: true, updatedBy: true, assignments: { include: { user: true } } }
+    });
+    
+    return mapTaskToLegacy(taskWithAssignments);
 }
 
 async function updateTask(taskId, updates) {
