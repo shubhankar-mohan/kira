@@ -3,12 +3,16 @@ class ModalManager {
     constructor() {
         this.setupModalListeners();
         this.setupTaskModalEnhancements();
+        this.setupConfirmModal();
 
         // Cached handlers for create task modal buttons
         this.boundCancelHandler = null;
         this.boundCreateHandler = null;
         this.boundAssigneeDropdownHandler = null;
         this.boundDropdownCloseHandler = null;
+        
+        // Custom confirm modal resolver
+        this.confirmResolver = null;
     }
 
     setupModalListeners() {
@@ -158,6 +162,131 @@ class ModalManager {
         }
     }
 
+    setupConfirmModal() {
+        const cancelBtn = document.getElementById('confirmModalCancel');
+        const confirmBtn = document.getElementById('confirmModalConfirm');
+        const overlay = document.getElementById('confirmModal');
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.hideConfirmModal(false);
+            });
+        }
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                this.hideConfirmModal(true);
+            });
+        }
+
+        // Close on overlay click
+        if (overlay) {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    this.hideConfirmModal(false);
+                }
+            });
+        }
+
+        // Close on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !overlay?.classList.contains('hidden')) {
+                this.hideConfirmModal(false);
+            }
+        });
+    }
+
+    showConfirm(options = {}) {
+        const {
+            title = 'Confirm Action',
+            message = 'Are you sure you want to proceed?',
+            confirmText = 'Confirm',
+            cancelText = 'Cancel',
+            type = 'danger', // 'danger', 'warning', 'info', 'primary'
+            icon = null
+        } = options;
+
+        return new Promise((resolve) => {
+            this.confirmResolver = resolve;
+
+            const modal = document.getElementById('confirmModal');
+            const titleEl = document.getElementById('confirmModalTitle');
+            const messageEl = document.getElementById('confirmModalMessage');
+            const confirmBtn = document.getElementById('confirmModalConfirm');
+            const cancelBtn = document.getElementById('confirmModalCancel');
+            const iconEl = document.getElementById('confirmModalIcon');
+
+            // Set content
+            if (titleEl) titleEl.textContent = title;
+            if (messageEl) messageEl.textContent = message;
+            if (confirmBtn) confirmBtn.textContent = confirmText;
+            if (cancelBtn) cancelBtn.textContent = cancelText;
+
+            // Set icon type
+            if (iconEl) {
+                iconEl.className = 'confirm-modal-icon';
+                if (type === 'warning') iconEl.classList.add('warning');
+                if (type === 'info') iconEl.classList.add('info');
+                
+                // Update icon SVG based on type
+                if (icon) {
+                    iconEl.innerHTML = icon;
+                } else {
+                    // Default icons
+                    if (type === 'danger') {
+                        iconEl.innerHTML = `
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                        `;
+                    } else if (type === 'warning') {
+                        iconEl.innerHTML = `
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                        `;
+                    } else if (type === 'info') {
+                        iconEl.innerHTML = `
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M12 16v-4"></path>
+                                <path d="M12 8h.01"></path>
+                            </svg>
+                        `;
+                    }
+                }
+            }
+
+            // Set button style
+            if (confirmBtn) {
+                confirmBtn.className = 'confirm-btn confirm-btn-confirm';
+                if (type === 'warning') confirmBtn.classList.add('warning');
+                if (type === 'primary' || type === 'info') confirmBtn.classList.add('primary');
+            }
+
+            // Show modal
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+        });
+    }
+
+    hideConfirmModal(confirmed) {
+        const modal = document.getElementById('confirmModal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+
+        if (this.confirmResolver) {
+            this.confirmResolver(confirmed);
+            this.confirmResolver = null;
+        }
+    }
+
     handleAction(action, event) {
         const sprintId = event.target.dataset.sprintId;
         const page = event.target.dataset.page || event.target.closest('[data-page]')?.dataset.page;
@@ -292,6 +421,8 @@ class ModalManager {
                 this.saveUserDetails();
                 break;
             case 'deleteUser':
+                event.preventDefault();
+                event.stopPropagation();
                 const deleteButton = event.target.closest('[data-action="deleteUser"]');
                 const userIdToDelete = deleteButton?.dataset.userId;
                 if (userIdToDelete) {
@@ -447,19 +578,51 @@ class ModalManager {
             return;
         }
         
-        if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-            return;
-        }
-        
-        // Prevent duplicate submissions
+        // Prevent duplicate submissions - check BEFORE showing confirm dialog
         if (this.isDeletingUser) {
             console.log('⚠️ Already deleting user, ignoring duplicate call');
             return;
         }
-
+        
+        // Set flag immediately to prevent duplicate confirm dialogs
+        this.isDeletingUser = true;
+        
+        // Disable the delete button immediately
+        const deleteBtn = document.querySelector('[data-action="deleteUser"]');
+        if (deleteBtn) {
+            deleteBtn.disabled = true;
+            deleteBtn.style.opacity = '0.5';
+            deleteBtn.style.cursor = 'not-allowed';
+        }
+        
         try {
-            this.isDeletingUser = true;
+            // Show custom confirmation dialog
+            const confirmed = await this.showConfirm({
+                title: 'Delete User',
+                message: 'Are you sure you want to delete this user? This action cannot be undone.',
+                confirmText: 'Delete User',
+                cancelText: 'Cancel',
+                type: 'danger'
+            });
+            
+            if (!confirmed) {
+                // User cancelled, reset flag and button
+                this.isDeletingUser = false;
+                if (deleteBtn) {
+                    deleteBtn.disabled = false;
+                    deleteBtn.style.opacity = '';
+                    deleteBtn.style.cursor = '';
+                }
+                return;
+            }
+
+            // User confirmed - CLOSE MODAL IMMEDIATELY before API call
+            this.closeModal('userDetailsModal');
+            
+            // Show loading indicator
             window.uiManager.showLoading();
+            
+            // Proceed with deletion API call
             const response = await api.deleteUser(userId);
             
             if (response.success) {
@@ -470,11 +633,11 @@ class ModalManager {
                 
                 console.log(`🗑️ User deleted. Before: ${beforeCount}, After: ${afterCount}, Removed: ${beforeCount - afterCount}`);
                 
-                window.uiManager.showNotification('User deleted successfully!', 'success');
-                this.closeModal('userDetailsModal');
-                
-                // Re-render users
+                // Re-render users list FIRST
                 window.uiManager.renderUsers();
+                
+                // Then show success notification
+                window.uiManager.showNotification('User deleted successfully!', 'success');
             } else {
                 window.uiManager.showNotification('Failed to delete user: ' + response.error, 'error');
             }
@@ -484,6 +647,14 @@ class ModalManager {
         } finally {
             this.isDeletingUser = false;
             window.uiManager.hideLoading();
+            
+            // Re-enable button in case of error (modal will close on success)
+            const deleteBtn = document.querySelector('[data-action="deleteUser"]');
+            if (deleteBtn) {
+                deleteBtn.disabled = false;
+                deleteBtn.style.opacity = '';
+                deleteBtn.style.cursor = '';
+            }
         }
     }
 
