@@ -1336,8 +1336,8 @@ class ModalManager {
         }
 
         try {
-            // Determine task ID
-            const taskId = window.taskManager.currentTaskId || window.router.currentTaskId;
+            // Determine task ID - prefer router's currentTaskId as authoritative source
+            const taskId = window.router.currentTaskId || window.taskManager.currentTaskId;
             if (!taskId) {
                 window.taskManager.showNotification('No task selected', 'error');
                 return;
