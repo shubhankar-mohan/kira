@@ -1190,28 +1190,43 @@ class ModalManager {
         // Update header badges and title
         this.updateTaskHeader(task);
 
+        // Setup multi-select behavior FIRST
+        console.log('Setting up detail assignee multi-select...');
+        this.setupDetailAssigneeMultiSelect();
+        
         // Populate assignee dropdown
         this.populateTaskDetailsDropdowns();
 
-        // Set current assignees
+        // Set current assignees AFTER dropdown is populated (with small delay to ensure DOM is ready)
         if (task.assignedTo) {
             const assignees = String(task.assignedTo).split(',').map(e => e.trim()).filter(Boolean);
             document.getElementById('detailTaskAssignee').value = task.assignedTo;
             
-            // Check the appropriate checkboxes
-            const dropdown = document.getElementById('detailTaskAssigneeDropdown');
-            if (dropdown) {
-                assignees.forEach(email => {
-                    const checkbox = dropdown.querySelector(`input[value="${email}"]`);
-                    if (checkbox) checkbox.checked = true;
-                });
-            }
+            console.log('Setting current assignees:', assignees);
             
-            // Update display text
-            const displayText = document.querySelector('[data-multiselect-id="detailTaskAssigneeMulti"] .multiselect-text');
-            if (displayText) {
-                displayText.textContent = assignees.length > 0 ? `${assignees.length} selected` : 'Select assignees';
-            }
+            // Use setTimeout to ensure DOM is ready
+            setTimeout(() => {
+                // Check the appropriate checkboxes
+                const dropdown = document.getElementById('detailTaskAssigneeDropdown');
+                if (dropdown) {
+                    assignees.forEach(email => {
+                        const checkbox = dropdown.querySelector(`input[value="${email}"]`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            console.log('Checked assignee:', email);
+                        } else {
+                            console.log('Checkbox not found for:', email);
+                        }
+                    });
+                }
+                
+                // Update display text
+                const displayText = document.querySelector('[data-multiselect-id="detailTaskAssigneeMulti"] .multiselect-text');
+                if (displayText) {
+                    displayText.textContent = assignees.length > 0 ? `${assignees.length} selected` : 'Select assignees';
+                    console.log('Updated display text to:', displayText.textContent);
+                }
+            }, 100);
         }
 
         // Set current sprint
@@ -1302,10 +1317,6 @@ class ModalManager {
                 `;
                 assigneeDropdown.appendChild(option);
             });
-            
-            // Setup multi-select behavior for detail modal
-            console.log('Setting up assignee multi-select for detail modal...');
-            this.setupDetailAssigneeMultiSelect();
         } else {
             console.warn('Could not populate assignee dropdown:', {
                 hasElement: !!assigneeDropdown,
@@ -1378,12 +1389,24 @@ class ModalManager {
         });
         
         if (multiselectDisplay && dropdown) {
+            console.log('Setting up click handler for detail assignee dropdown');
             // Toggle dropdown
             multiselectDisplay.removeEventListener('click', this.boundDetailAssigneeHandler);
             this.boundDetailAssigneeHandler = (event) => {
+                console.log('Detail assignee dropdown clicked');
                 event.stopPropagation();
+                
+                // Toggle the container class (this controls CSS display)
+                const container = multiselectDisplay.closest('.multiselect-container');
+                if (container) {
+                    container.classList.toggle('open');
+                    console.log('Container open state:', container.classList.contains('open'));
+                }
+                
+                // Also toggle individual elements for debugging
                 dropdown.classList.toggle('open');
                 multiselectDisplay.classList.toggle('open');
+                console.log('Dropdown open state:', dropdown.classList.contains('open'));
             };
             multiselectDisplay.addEventListener('click', this.boundDetailAssigneeHandler);
             
@@ -1393,6 +1416,10 @@ class ModalManager {
                 const isClickInsideDisplay = multiselectDisplay.contains(event.target);
                 
                 if (!isClickInsideDropdown && !isClickInsideDisplay) {
+                    const container = multiselectDisplay.closest('.multiselect-container');
+                    if (container) {
+                        container.classList.remove('open');
+                    }
                     dropdown.classList.remove('open');
                     multiselectDisplay.classList.remove('open');
                 }
@@ -1412,6 +1439,10 @@ class ModalManager {
             const escHandler = (event) => {
                 if (event.key === 'Escape' && dropdown.classList.contains('open')) {
                     event.stopPropagation(); // Prevent modal from closing when dropdown is open
+                    const container = multiselectDisplay.closest('.multiselect-container');
+                    if (container) {
+                        container.classList.remove('open');
+                    }
                     dropdown.classList.remove('open');
                     multiselectDisplay.classList.remove('open');
                 }
