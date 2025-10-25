@@ -1327,7 +1327,9 @@ class SlackService {
     }
 
     buildTaskCreatedBlocks(task) {
-        const taskUrl = `${getFrontendBaseUrl()}/task/${task.id}`;
+        // Use shortId if available, otherwise fall back to UUID
+        const taskIdentifier = task.shortId || task.id;
+        const taskUrl = `${getFrontendBaseUrl()}/task/${taskIdentifier}`;
         
         return [
             {
@@ -1340,7 +1342,7 @@ class SlackService {
             {
                 type: 'section',
                 fields: [
-                    { type: 'mrkdwn', text: `*ID:* ${task.id}` },
+                    { type: 'mrkdwn', text: `*ID:* ${taskIdentifier}` },
                     { type: 'mrkdwn', text: `*Priority:* ${task.priority}` },
                     { type: 'mrkdwn', text: `*Type:* ${task.type}` },
                     { type: 'mrkdwn', text: `*Assigned:* ${task.assignedTo || 'Unassigned'}` }
@@ -1513,7 +1515,9 @@ Create tasks by mentioning @kira: \`@kira Fix login bug @john @jane P1 Feature d
             for (const slackUserId of assignedUsers) {
                 const user = await this.getUserBySlackId(slackUserId);
                 if (user) {
-                    const taskUrl = `${getFrontendBaseUrl()}/task/${task.id}`;
+                    // Use shortId if available, otherwise fall back to UUID
+                    const taskIdentifier = task.shortId || task.id;
+                    const taskUrl = `${getFrontendBaseUrl()}/task/${taskIdentifier}`;
                     
                     await client.chat.postMessage({
                         channel: slackUserId, // DM to the user

@@ -850,13 +850,21 @@ class ModalManager {
         const hiddenInput = document.getElementById('taskAssignee');
         const displayText = document.querySelector('.task-assignee-multiselect .multiselect-text');
 
-        if (!dropdown || !hiddenInput) return;
+        if (!dropdown || !hiddenInput) {
+            console.warn('Assignee dropdown or hidden input not found');
+            return;
+        }
 
         const selected = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked'))
-            .map((checkbox) => checkbox.parentElement?.dataset.value)
+            .map((checkbox) => {
+                const email = checkbox.parentElement?.dataset.value;
+                console.log('Selected assignee:', email);
+                return email;
+            })
             .filter(Boolean);
 
         hiddenInput.value = selected.join(',');
+        console.log('Updated taskAssignee hidden input value:', hiddenInput.value);
 
         if (displayText) {
             displayText.textContent = selected.length > 0 ? `${selected.length} selected` : 'Select assignees';
