@@ -73,10 +73,11 @@ function mapStatusForLegacy(status) {
         PENDING: 'Not started',
         IN_PROGRESS: 'In progress',
         DEV_TESTING: 'Dev Testing',
+        PRODUCT_TESTING: 'Product Testing',
         PRODUCT_BLOCKED: 'Blocked - Product',
         ENGG_BLOCKED: 'Blocked - Engineering',
         DONE: 'Done',
-        NOT_REQUIRED: 'Awaiting Release'
+        NOT_REQUIRED: 'Not Required'
     };
     return map[status] || status;
 }
@@ -627,11 +628,12 @@ function mapStatusToEnum(status) {
         'pending': 'PENDING',
         'in progress': 'IN_PROGRESS',
         'dev testing': 'DEV_TESTING',
-        'product testing': 'PRODUCT_BLOCKED',
+        'product testing': 'PRODUCT_TESTING',
         'awaiting release': 'DEV_TESTING',
         'done': 'DONE',
         'blocked - product': 'PRODUCT_BLOCKED',
-        'blocked - engineering': 'ENGG_BLOCKED'
+        'blocked - engineering': 'ENGG_BLOCKED',
+        'not required': 'NOT_REQUIRED'
     };
     return map[normalized] || status;
 }

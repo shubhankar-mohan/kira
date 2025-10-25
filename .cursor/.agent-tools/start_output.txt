@@ -1,0 +1,113 @@
+🏪 Starting KiranaClub Task Manager...
+🔄 Single server mode: Backend serves frontend on port 3001
+✅ Node.js version: v18.20.5
+🗄️  Ensuring data directories exist...
+🐳 Starting MySQL and Redis containers (docker compose)...
+time="2025-10-18T08:08:19+05:30" level=warning msg="The \"DATABASE_URL\" variable is not set. Defaulting to a blank string."
+time="2025-10-18T08:08:19+05:30" level=warning msg="The \"GOOGLE_SHEETS_CREDENTIALS\" variable is not set. Defaulting to a blank string."
+time="2025-10-18T08:08:19+05:30" level=warning msg="The \"GOOGLE_SHEETS_SPREADSHEET_ID\" variable is not set. Defaulting to a blank string."
+time="2025-10-18T08:08:19+05:30" level=warning msg="The \"SLACK_BOT_TOKEN\" variable is not set. Defaulting to a blank string."
+time="2025-10-18T08:08:19+05:30" level=warning msg="The \"SLACK_SIGNING_SECRET\" variable is not set. Defaulting to a blank string."
+time="2025-10-18T08:08:19+05:30" level=warning msg="The \"SLACK_APP_TOKEN\" variable is not set. Defaulting to a blank string."
+ Container kira-redis  Running
+ Container kira-mysql  Running
+⏳ Waiting for MySQL on localhost:3307...
+✅ MySQL reachable.
+🧬 Generating Prisma client...
+🗃️  Running Prisma migrations...
+
+> kira-backend@1.0.0 prisma:migrate
+> prisma migrate dev
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": MySQL database "kira_db" at "localhost:3307"
+
+Error: P3006
+
+Migration `20250927134743_v1` failed to apply cleanly to the shadow database. 
+Error code: P3018
+Error:
+A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve
+
+Migration name: 20250927134743_v1
+
+Database error code: 1142
+
+Database error:
+ALTER command denied to user 'kira_user'@'192.168.65.1' for table 'sprint'
+
+Please check the query number 9 from the migration file.
+
+
+⚠️  Prisma migrate failed. Falling back to schema sync (db push)...
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": MySQL database "kira_db" at "localhost:3307"
+
+The database is already in sync with the Prisma schema.
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v5.22.0) to ./node_modules/@prisma/client in 229ms
+
+🌱 Seeding database (demo users, baseline data)...
+
+> kira-backend@1.0.0 prisma:seed
+> node prisma/seed.js
+
+🚀 Starting KiranaClub Task Manager on port 3001...
+🔄 Backend will serve frontend files with client-side routing
+
+> kira-backend@1.0.0 start
+> node server.js
+
+node:events:495
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1817:16)
+    at listenInCluster (node:net:1865:12)
+    at Server.listen (node:net:1953:7)
+    at Function.listen (/Users/retailpulse/Documents/Shubhankar/kira/backend/node_modules/express/lib/application.js:635:24)
+    at Object.<anonymous> (/Users/retailpulse/Documents/Shubhankar/kira/backend/server.js:194:5)
+    at Module._compile (node:internal/modules/cjs/loader:1364:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1422:10)
+    at Module.load (node:internal/modules/cjs/loader:1203:32)
+    at Module._load (node:internal/modules/cjs/loader:1019:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:128:12)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1844:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v18.20.5
+✅ Server is running successfully!
+✅ Database health OK!
+✅ Frontend is being served correctly!
+
+🎉 KiranaClub Task Manager is now running!
+📱 Application: http://localhost:3001
+📊 Health Check: http://localhost:3001/health
+🔌 API Endpoints: http://localhost:3001/api/*
+
+🔐 Demo Login Credentials:
+   Admin: admin@kirana.club / admin123
+   Manager: manager@kirana.club / manager123
+   Developer: dev@kirana.club / dev123
+
+📋 Available URLs:
+   Dashboard: http://localhost:3001/dashboard
+   Task Board: http://localhost:3001/board
+   Sprints: http://localhost:3001/sprints
+   Task Details: http://localhost:3001/task/{taskId}
+
+📖 See README.md and IMPLEMENTATION_JOURNAL.md for complete setup instructions
+
+Press Ctrl+C to stop the server

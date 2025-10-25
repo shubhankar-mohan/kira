@@ -258,9 +258,11 @@ class App {
                                             <option value="Not started">Not Started</option>
                                             <option value="In progress">In Progress</option>
                                             <option value="Dev Testing">Dev Testing</option>
+                                            <option value="Product Testing">Product Testing</option>
                                             <option value="Done">Done</option>
                                             <option value="Blocked - Product">Blocked - Product</option>
                                             <option value="Blocked - Engineering">Blocked - Engineering</option>
+                                            <option value="Not Required">Not Required</option>
                                         </select>
                                         <svg class="select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="6,9 12,15 18,9"></polyline>
