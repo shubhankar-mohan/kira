@@ -854,20 +854,39 @@ class ModalManager {
             multiselectDisplay.removeEventListener('click', this.boundAssigneeDropdownHandler);
             multiselectDisplay.addEventListener('click', this.boundAssigneeDropdownHandler);
 
-            // Close dropdown when clicking outside
+            // Close dropdown when clicking outside the dropdown area
             if (!this.boundDropdownCloseHandler) {
                 this.boundDropdownCloseHandler = (event) => {
-                    if (!modal.contains(event.target)) {
+                    // Check if click is outside both the dropdown and the multiselect display
+                    const isClickInsideDropdown = dropdown.contains(event.target);
+                    const isClickInsideDisplay = multiselectDisplay.contains(event.target);
+                    
+                    if (!isClickInsideDropdown && !isClickInsideDisplay) {
                         dropdown.classList.remove('open');
                         multiselectDisplay.classList.remove('open');
                     }
                 };
             }
 
+            // Remove old listener and add new one
             document.removeEventListener('click', this.boundDropdownCloseHandler);
             setTimeout(() => {
                 document.addEventListener('click', this.boundDropdownCloseHandler);
             }, 0);
+            
+            // Add ESC key handler to close dropdown
+            if (!this.boundDropdownEscHandler) {
+                this.boundDropdownEscHandler = (event) => {
+                    if (event.key === 'Escape' && dropdown.classList.contains('open')) {
+                        event.stopPropagation(); // Prevent modal from closing
+                        dropdown.classList.remove('open');
+                        multiselectDisplay.classList.remove('open');
+                    }
+                };
+            }
+            
+            document.removeEventListener('keydown', this.boundDropdownEscHandler);
+            document.addEventListener('keydown', this.boundDropdownEscHandler);
         }
 
         // Sync checkbox selections into hidden input
