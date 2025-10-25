@@ -589,6 +589,12 @@ class TaskManager {
             createdBy: window.authManager?.currentUser?.email || window.authManager?.currentUser?.name || 'Dashboard User'
         };
 
+        console.log('📝 Creating task with data:', {
+            ...formData,
+            assignedTo: formData.assignedTo || '(empty)',
+            sprintWeek: formData.sprintWeek || '(empty)'
+        });
+
         this.showLoading();
         try {
             const result = await this.createTaskApi(formData);
