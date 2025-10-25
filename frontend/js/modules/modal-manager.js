@@ -184,9 +184,6 @@ class ModalManager {
 
         // Dynamic header updates for Create Task modal
         this.setupCreateTaskModalDynamics();
-        
-        // Setup multi-select assignee dropdown
-        this.setupAssigneeMultiSelect();
 
         // Status and priority change handling
         const statusSelect = document.getElementById('detailTaskStatus');
@@ -769,6 +766,7 @@ class ModalManager {
                     await this.refreshCreateTaskDropdowns();
                     this.bindCreateTaskModalEvents(modal);
                     // Setup assignee multiselect
+                    console.log('Setting up assignee multi-select for create task modal...');
                     this.setupAssigneeMultiSelect();
                     // Ensure body exists/visible
                     const body = modal.querySelector('.task-modal-body');
@@ -1306,6 +1304,7 @@ class ModalManager {
             });
             
             // Setup multi-select behavior for detail modal
+            console.log('Setting up assignee multi-select for detail modal...');
             this.setupDetailAssigneeMultiSelect();
         } else {
             console.warn('Could not populate assignee dropdown:', {
@@ -1362,11 +1361,21 @@ class ModalManager {
     }
     
     setupDetailAssigneeMultiSelect() {
+        console.log('setupDetailAssigneeMultiSelect: Starting setup...');
         const modal = document.getElementById('taskDetailsModal');
-        if (!modal) return;
+        if (!modal) {
+            console.log('setupDetailAssigneeMultiSelect: taskDetailsModal not found');
+            return;
+        }
         
         const multiselectDisplay = modal.querySelector('[data-multiselect-id="detailTaskAssigneeMulti"]');
         const dropdown = modal.querySelector('#detailTaskAssigneeDropdown');
+        
+        console.log('setupDetailAssigneeMultiSelect: Elements found:', {
+            modal: !!modal,
+            multiselectDisplay: !!multiselectDisplay,
+            dropdown: !!dropdown
+        });
         
         if (multiselectDisplay && dropdown) {
             // Toggle dropdown
@@ -1865,10 +1874,18 @@ class ModalManager {
     }
 
     setupAssigneeMultiSelect() {
+        console.log('setupAssigneeMultiSelect: Starting setup...');
         const assigneeContainer = document.querySelector('.task-assignee-multiselect');
         const assigneeDisplay = assigneeContainer?.querySelector('[data-multiselect-id="taskAssigneeMulti"]');
         const assigneeDropdown = document.getElementById('taskAssigneeDropdown');
         const hiddenAssigneeInput = document.getElementById('taskAssignee');
+        
+        console.log('setupAssigneeMultiSelect: Elements found:', {
+            assigneeContainer: !!assigneeContainer,
+            assigneeDisplay: !!assigneeDisplay,
+            assigneeDropdown: !!assigneeDropdown,
+            hiddenAssigneeInput: !!hiddenAssigneeInput
+        });
         
         if (!assigneeDisplay || !assigneeDropdown || !assigneeContainer) {
             console.log('setupAssigneeMultiSelect: missing elements', {
