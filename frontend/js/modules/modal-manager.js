@@ -837,66 +837,9 @@ class ModalManager {
 
     bindCreateTaskModalEvents(modal) {
         if (!modal) return;
-
-        // Set up assignee multiselect dropdown behavior
-        const multiselectDisplay = modal.querySelector('.task-assignee-multiselect .multiselect-display');
-        const dropdown = modal.querySelector('#taskAssigneeDropdown');
-
-        if (multiselectDisplay && dropdown) {
-            if (!this.boundAssigneeDropdownHandler) {
-                this.boundAssigneeDropdownHandler = (event) => {
-                    event.stopPropagation();
-                    dropdown.classList.toggle('open');
-                    multiselectDisplay.classList.toggle('open');
-                };
-            }
-
-            multiselectDisplay.removeEventListener('click', this.boundAssigneeDropdownHandler);
-            multiselectDisplay.addEventListener('click', this.boundAssigneeDropdownHandler);
-
-            // Close dropdown when clicking outside the dropdown area
-            if (!this.boundDropdownCloseHandler) {
-                this.boundDropdownCloseHandler = (event) => {
-                    // Check if click is outside both the dropdown and the multiselect display
-                    const isClickInsideDropdown = dropdown.contains(event.target);
-                    const isClickInsideDisplay = multiselectDisplay.contains(event.target);
-                    
-                    if (!isClickInsideDropdown && !isClickInsideDisplay) {
-                        dropdown.classList.remove('open');
-                        multiselectDisplay.classList.remove('open');
-                    }
-                };
-            }
-
-            // Remove old listener and add new one
-            document.removeEventListener('click', this.boundDropdownCloseHandler);
-            setTimeout(() => {
-                document.addEventListener('click', this.boundDropdownCloseHandler);
-            }, 0);
-            
-            // Add ESC key handler to close dropdown
-            if (!this.boundDropdownEscHandler) {
-                this.boundDropdownEscHandler = (event) => {
-                    if (event.key === 'Escape' && dropdown.classList.contains('open')) {
-                        event.stopPropagation(); // Prevent modal from closing
-                        dropdown.classList.remove('open');
-                        multiselectDisplay.classList.remove('open');
-                    }
-                };
-            }
-            
-            document.removeEventListener('keydown', this.boundDropdownEscHandler);
-            document.addEventListener('keydown', this.boundDropdownEscHandler);
-        }
-
-        // Sync checkbox selections into hidden input
-        if (dropdown) {
-            dropdown.removeEventListener('change', this.boundAssigneeChangeHandler);
-            if (!this.boundAssigneeChangeHandler) {
-                this.boundAssigneeChangeHandler = this.handleAssigneeSelectionChange.bind(this);
-            }
-            dropdown.addEventListener('change', this.boundAssigneeChangeHandler);
-        }
+        // This method is now handled by setupAssigneeMultiSelect()
+        // Keeping this method stub for compatibility
+        console.log('bindCreateTaskModalEvents: Assignee setup delegated to setupAssigneeMultiSelect()');
     }
 
     handleAssigneeSelectionChange() {
@@ -1455,6 +1398,17 @@ class ModalManager {
             dropdown.removeEventListener('change', this.boundDetailAssigneeChangeHandler);
             this.boundDetailAssigneeChangeHandler = () => this.handleDetailAssigneeSelectionChange();
             dropdown.addEventListener('change', this.boundDetailAssigneeChangeHandler);
+            
+            // Close dropdown with ESC key
+            const escHandler = (event) => {
+                if (event.key === 'Escape' && dropdown.classList.contains('open')) {
+                    event.stopPropagation(); // Prevent modal from closing when dropdown is open
+                    dropdown.classList.remove('open');
+                    multiselectDisplay.classList.remove('open');
+                }
+            };
+            document.removeEventListener('keydown', escHandler);
+            document.addEventListener('keydown', escHandler);
         }
     }
     
@@ -1982,6 +1936,14 @@ class ModalManager {
         // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.task-assignee-multiselect')) {
+                assigneeContainer.classList.remove('open');
+            }
+        });
+        
+        // Close dropdown with ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && assigneeContainer.classList.contains('open')) {
+                e.stopPropagation(); // Prevent modal from closing when dropdown is open
                 assigneeContainer.classList.remove('open');
             }
         });

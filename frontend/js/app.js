@@ -571,6 +571,18 @@ class App {
             dropdown.removeEventListener('change', this.boundPageAssigneeChangeHandler);
             this.boundPageAssigneeChangeHandler = () => this.handlePageAssigneeSelectionChange();
             dropdown.addEventListener('change', this.boundPageAssigneeChangeHandler);
+            
+            // Close dropdown with ESC key
+            const escHandler = (event) => {
+                if (event.key === 'Escape' && dropdown.classList.contains('open')) {
+                    event.preventDefault();
+                    event.stopPropagation(); // Prevent page navigation
+                    dropdown.classList.remove('open');
+                    multiselectDisplay.classList.remove('open');
+                }
+            };
+            document.removeEventListener('keydown', escHandler);
+            document.addEventListener('keydown', escHandler);
         }
     }
     
