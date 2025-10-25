@@ -490,7 +490,7 @@ body {
 .main-content {
     display: flex;
     flex: 1;
-    height: calc(100vh - 120px);
+    height: calc(100vh - 80px);
 }
 
 /* ===== SIDEBAR ===== */
