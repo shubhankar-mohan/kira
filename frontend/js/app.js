@@ -300,15 +300,17 @@ class App {
                                 </div>
                                 
                                 <div class="input-group-modern">
-                                    <label for="pageTaskAssignee" class="input-label">Assigned To</label>
-                                    <div class="select-wrapper">
-                                        <select id="pageTaskAssignee" class="select-modern">
-                                            <option value="">👤 Select assignee</option>
-                                        </select>
-                                        <svg class="select-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="6,9 12,15 18,9"></polyline>
-                                        </svg>
+                                    <label for="pageTaskAssignee" class="input-label">Assigned to</label>
+                                    <div class="task-assignee-multiselect">
+                                        <div class="multiselect-display" data-multiselect-id="pageTaskAssigneeMulti">
+                                            <span class="multiselect-text">Select assignees</span>
+                                            <span class="multiselect-arrow">▼</span>
+                                        </div>
+                                        <div class="multiselect-dropdown" id="pageTaskAssigneeDropdown">
+                                            <!-- Assignee options will be populated here -->
+                                        </div>
                                     </div>
+                                    <input type="hidden" id="pageTaskAssignee" name="pageTaskAssignee">
                                 </div>
                                 
                                 <div class="input-group-modern">
@@ -470,10 +472,27 @@ class App {
         // Populate dropdowns
         this.populatePageTaskDropdowns();
 
-        // Set current assignee and sprint
+        // Set current assignees
         if (task.assignedTo) {
+            const assignees = String(task.assignedTo).split(',').map(e => e.trim()).filter(Boolean);
             document.getElementById('pageTaskAssignee').value = task.assignedTo;
+            
+            // Check the appropriate checkboxes
+            const dropdown = document.getElementById('pageTaskAssigneeDropdown');
+            if (dropdown) {
+                assignees.forEach(email => {
+                    const checkbox = dropdown.querySelector(`input[value="${email}"]`);
+                    if (checkbox) checkbox.checked = true;
+                });
+            }
+            
+            // Update display text
+            const displayText = document.querySelector('[data-multiselect-id="pageTaskAssigneeMulti"] .multiselect-text');
+            if (displayText) {
+                displayText.textContent = assignees.length > 0 ? `${assignees.length} selected` : 'Select assignees';
+            }
         }
+        
         if (task.sprintWeek) {
             document.getElementById('pageTaskSprint').value = task.sprintWeek;
         }
@@ -486,16 +505,23 @@ class App {
     }
 
     populatePageTaskDropdowns() {
-        // Populate assignee dropdown
-        const assigneeSelect = document.getElementById('pageTaskAssignee');
-        if (assigneeSelect) {
-            assigneeSelect.innerHTML = '<option value="">👤 Select assignee</option>';
+        // Populate assignee multi-select dropdown
+        const assigneeDropdown = document.getElementById('pageTaskAssigneeDropdown');
+        if (assigneeDropdown && this.users) {
+            assigneeDropdown.innerHTML = '';
             this.users.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user.email;
-                option.textContent = user.name;
-                assigneeSelect.appendChild(option);
+                const option = document.createElement('div');
+                option.className = 'multiselect-option';
+                option.dataset.value = user.email;
+                option.innerHTML = `
+                    <input type="checkbox" id="page-assignee-${user.email.replace(/[@.]/g, '-')}" value="${user.email}">
+                    <label for="page-assignee-${user.email.replace(/[@.]/g, '-')}">${user.name || user.email}</label>
+                `;
+                assigneeDropdown.appendChild(option);
             });
+            
+            // Setup multi-select behavior for page
+            this.setupPageAssigneeMultiSelect();
         }
 
         // Populate sprint dropdown
@@ -508,6 +534,61 @@ class App {
                 option.textContent = sprint.name;
                 sprintSelect.appendChild(option);
             });
+        }
+    }
+    
+    setupPageAssigneeMultiSelect() {
+        const multiselectDisplay = document.querySelector('[data-multiselect-id="pageTaskAssigneeMulti"]');
+        const dropdown = document.getElementById('pageTaskAssigneeDropdown');
+        
+        if (multiselectDisplay && dropdown) {
+            // Toggle dropdown
+            multiselectDisplay.removeEventListener('click', this.boundPageAssigneeHandler);
+            this.boundPageAssigneeHandler = (event) => {
+                event.stopPropagation();
+                dropdown.classList.toggle('open');
+                multiselectDisplay.classList.toggle('open');
+            };
+            multiselectDisplay.addEventListener('click', this.boundPageAssigneeHandler);
+            
+            // Close dropdown when clicking outside
+            const closeHandler = (event) => {
+                const isClickInsideDropdown = dropdown.contains(event.target);
+                const isClickInsideDisplay = multiselectDisplay.contains(event.target);
+                
+                if (!isClickInsideDropdown && !isClickInsideDisplay) {
+                    dropdown.classList.remove('open');
+                    multiselectDisplay.classList.remove('open');
+                }
+            };
+            
+            document.removeEventListener('click', closeHandler);
+            setTimeout(() => {
+                document.addEventListener('click', closeHandler);
+            }, 0);
+            
+            // Handle checkbox changes
+            dropdown.removeEventListener('change', this.boundPageAssigneeChangeHandler);
+            this.boundPageAssigneeChangeHandler = () => this.handlePageAssigneeSelectionChange();
+            dropdown.addEventListener('change', this.boundPageAssigneeChangeHandler);
+        }
+    }
+    
+    handlePageAssigneeSelectionChange() {
+        const dropdown = document.getElementById('pageTaskAssigneeDropdown');
+        const hiddenInput = document.getElementById('pageTaskAssignee');
+        const displayText = document.querySelector('[data-multiselect-id="pageTaskAssigneeMulti"] .multiselect-text');
+        
+        if (!dropdown || !hiddenInput) return;
+        
+        const selected = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked'))
+            .map(checkbox => checkbox.value)
+            .filter(Boolean);
+        
+        hiddenInput.value = selected.join(',');
+        
+        if (displayText) {
+            displayText.textContent = selected.length > 0 ? `${selected.length} selected` : 'Select assignees';
         }
     }
 

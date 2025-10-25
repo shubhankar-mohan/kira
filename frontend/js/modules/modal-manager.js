@@ -1252,9 +1252,25 @@ class ModalManager {
         // Populate assignee dropdown
         this.populateTaskDetailsDropdowns();
 
-        // Set current assignee
+        // Set current assignees
         if (task.assignedTo) {
+            const assignees = String(task.assignedTo).split(',').map(e => e.trim()).filter(Boolean);
             document.getElementById('detailTaskAssignee').value = task.assignedTo;
+            
+            // Check the appropriate checkboxes
+            const dropdown = document.getElementById('detailTaskAssigneeDropdown');
+            if (dropdown) {
+                assignees.forEach(email => {
+                    const checkbox = dropdown.querySelector(`input[value="${email}"]`);
+                    if (checkbox) checkbox.checked = true;
+                });
+            }
+            
+            // Update display text
+            const displayText = document.querySelector('[data-multiselect-id="detailTaskAssigneeMulti"] .multiselect-text');
+            if (displayText) {
+                displayText.textContent = assignees.length > 0 ? `${assignees.length} selected` : 'Select assignees';
+            }
         }
 
         // Set current sprint
@@ -1326,24 +1342,31 @@ class ModalManager {
 
     populateTaskDetailsDropdowns() {
         console.log('populateTaskDetailsDropdowns called');
-        // Populate assignee dropdown
-        const assigneeSelect = document.getElementById('detailTaskAssignee');
-        console.log('assigneeSelect element:', assigneeSelect);
+        // Populate assignee multi-select dropdown
+        const assigneeDropdown = document.getElementById('detailTaskAssigneeDropdown');
+        console.log('assigneeDropdown element:', assigneeDropdown);
         console.log('window.taskManager:', window.taskManager);
         console.log('window.taskManager.users:', window.taskManager?.users);
         
-        if (assigneeSelect && window.taskManager && window.taskManager.users) {
+        if (assigneeDropdown && window.taskManager && window.taskManager.users) {
             console.log('Populating assignee dropdown with', window.taskManager.users.length, 'users');
-            assigneeSelect.innerHTML = '<option value="">Select assignee</option>';
+            assigneeDropdown.innerHTML = '';
             window.taskManager.users.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user.email;
-                option.textContent = user.name || user.email;
-                assigneeSelect.appendChild(option);
+                const option = document.createElement('div');
+                option.className = 'multiselect-option';
+                option.dataset.value = user.email;
+                option.innerHTML = `
+                    <input type="checkbox" id="detail-assignee-${user.email.replace(/[@.]/g, '-')}" value="${user.email}">
+                    <label for="detail-assignee-${user.email.replace(/[@.]/g, '-')}">${user.name || user.email}</label>
+                `;
+                assigneeDropdown.appendChild(option);
             });
+            
+            // Setup multi-select behavior for detail modal
+            this.setupDetailAssigneeMultiSelect();
         } else {
             console.warn('Could not populate assignee dropdown:', {
-                hasElement: !!assigneeSelect,
+                hasElement: !!assigneeDropdown,
                 hasTaskManager: !!window.taskManager,
                 hasUsers: !!(window.taskManager?.users),
                 userCount: window.taskManager?.users?.length || 0
@@ -1392,6 +1415,64 @@ class ModalManager {
                 option.textContent = sprint.sprintWeek || sprint.name;
                 sprintSelect.appendChild(option);
             });
+        }
+    }
+    
+    setupDetailAssigneeMultiSelect() {
+        const modal = document.getElementById('taskDetailsModal');
+        if (!modal) return;
+        
+        const multiselectDisplay = modal.querySelector('[data-multiselect-id="detailTaskAssigneeMulti"]');
+        const dropdown = modal.querySelector('#detailTaskAssigneeDropdown');
+        
+        if (multiselectDisplay && dropdown) {
+            // Toggle dropdown
+            multiselectDisplay.removeEventListener('click', this.boundDetailAssigneeHandler);
+            this.boundDetailAssigneeHandler = (event) => {
+                event.stopPropagation();
+                dropdown.classList.toggle('open');
+                multiselectDisplay.classList.toggle('open');
+            };
+            multiselectDisplay.addEventListener('click', this.boundDetailAssigneeHandler);
+            
+            // Close dropdown when clicking outside
+            const closeHandler = (event) => {
+                const isClickInsideDropdown = dropdown.contains(event.target);
+                const isClickInsideDisplay = multiselectDisplay.contains(event.target);
+                
+                if (!isClickInsideDropdown && !isClickInsideDisplay) {
+                    dropdown.classList.remove('open');
+                    multiselectDisplay.classList.remove('open');
+                }
+            };
+            
+            document.removeEventListener('click', closeHandler);
+            setTimeout(() => {
+                document.addEventListener('click', closeHandler);
+            }, 0);
+            
+            // Handle checkbox changes
+            dropdown.removeEventListener('change', this.boundDetailAssigneeChangeHandler);
+            this.boundDetailAssigneeChangeHandler = () => this.handleDetailAssigneeSelectionChange();
+            dropdown.addEventListener('change', this.boundDetailAssigneeChangeHandler);
+        }
+    }
+    
+    handleDetailAssigneeSelectionChange() {
+        const dropdown = document.getElementById('detailTaskAssigneeDropdown');
+        const hiddenInput = document.getElementById('detailTaskAssignee');
+        const displayText = document.querySelector('[data-multiselect-id="detailTaskAssigneeMulti"] .multiselect-text');
+        
+        if (!dropdown || !hiddenInput) return;
+        
+        const selected = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked'))
+            .map(checkbox => checkbox.value)
+            .filter(Boolean);
+        
+        hiddenInput.value = selected.join(',');
+        
+        if (displayText) {
+            displayText.textContent = selected.length > 0 ? `${selected.length} selected` : 'Select assignees';
         }
     }
 
