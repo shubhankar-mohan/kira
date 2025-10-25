@@ -79,11 +79,12 @@ class APIService {
             'pending': 'PENDING',
             'in progress': 'IN_PROGRESS',
             'dev testing': 'DEV_TESTING',
-            'product testing': 'PRODUCT_BLOCKED',
+            'product testing': 'PRODUCT_TESTING',
             'awaiting release': 'DEV_TESTING',
             'done': 'DONE',
             'blocked - product': 'PRODUCT_BLOCKED',
-            'blocked - engineering': 'ENGG_BLOCKED'
+            'blocked - engineering': 'ENGG_BLOCKED',
+            'not required': 'NOT_REQUIRED'
         };
         return map[normalized] || status;
     }
