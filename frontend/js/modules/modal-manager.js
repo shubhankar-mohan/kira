@@ -16,6 +16,12 @@ class ModalManager {
     }
 
     setupModalListeners() {
+        // Prevent duplicate listener setup
+        if (this._listenersSetup) {
+            return;
+        }
+        this._listenersSetup = true;
+        
         // Close modal when clicking outside
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('task-modal-overlay')) {
@@ -94,16 +100,28 @@ class ModalManager {
 
         // Handle button actions
         document.addEventListener('click', (e) => {
-            const action = e.target.dataset.action;
             // Support elements with data-action on ancestors (e.g., icons inside buttons)
-            const clickable = action ? e.target : e.target.closest('[data-action]');
-            const resolvedAction = action || clickable?.dataset.action;
-            if (action) {
-                this.handleAction(action, e);
-            } else if (clickable && resolvedAction) {
-                this.handleAction(resolvedAction, { ...e, target: clickable });
+            const clickable = e.target.closest('[data-action]');
+            if (clickable) {
+                const action = clickable.dataset.action;
+                if (action) {
+                    // Stop propagation immediately to prevent duplicate handling
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    
+                    // Create a new event-like object with the clickable as the target
+                    const eventWithClickable = {
+                        ...e,
+                        target: clickable,
+                        currentTarget: clickable,
+                        preventDefault: () => e.preventDefault(),
+                        stopPropagation: () => e.stopPropagation()
+                    };
+                    this.handleAction(action, eventWithClickable);
+                }
             }
-        });
+        }, { capture: true });
     }
 
     setupTaskModalEnhancements() {
@@ -288,8 +306,10 @@ class ModalManager {
     }
 
     handleAction(action, event) {
-        const sprintId = event.target.dataset.sprintId;
-        const page = event.target.dataset.page || event.target.closest('[data-page]')?.dataset.page;
+        // Use the element with data-action attribute (from currentTarget or closest)
+        const actionElement = event.currentTarget || event.target.closest('[data-action]') || event.target;
+        const sprintId = actionElement.dataset.sprintId;
+        const page = actionElement.dataset.page || actionElement.closest('[data-page]')?.dataset.page;
         
         // Prevent duplicate calls from event bubbling
         if (action === 'toggleCurrentSprint') {
@@ -370,12 +390,16 @@ class ModalManager {
                 }
                 break;
             case 'addComment':
+                event.preventDefault();
+                event.stopPropagation();
                 this.addComment();
                 break;
             case 'clearComment':
                 this.clearComment();
                 break;
             case 'addPageComment':
+                event.preventDefault();
+                event.stopPropagation();
                 this.addPageComment();
                 break;
             case 'clearPageComment':
@@ -1498,6 +1522,12 @@ class ModalManager {
 
     // Comment functionality
     async addComment() {
+        // Prevent duplicate submissions
+        if (this.isAddingModalComment) {
+            console.log('⚠️ Already adding modal comment, ignoring duplicate call');
+            return;
+        }
+
         const textarea = document.getElementById('taskCommentTextarea');
         const comment = textarea.value.trim();
 
@@ -1506,7 +1536,24 @@ class ModalManager {
             return;
         }
 
+        // Find and disable the comment button
+        const commentBtn = document.querySelector('[data-action="addComment"]');
+        const originalBtnText = commentBtn ? commentBtn.innerHTML : null;
+
         try {
+            this.isAddingModalComment = true;
+            
+            // Disable button and show loading state
+            if (commentBtn) {
+                commentBtn.disabled = true;
+                commentBtn.innerHTML = `
+                    <svg class="task-btn-icon task-animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                    </svg>
+                    Adding...
+                `;
+            }
+
             // Determine task ID - prefer router's currentTaskId as authoritative source
             const taskId = window.router.currentTaskId || window.taskManager.currentTaskId;
             if (!taskId) {
@@ -1537,6 +1584,16 @@ class ModalManager {
         } catch (error) {
             console.error('Error adding comment:', error);
             window.taskManager.showNotification('Failed to add comment', 'error');
+        } finally {
+            this.isAddingModalComment = false;
+            
+            // Re-enable button and restore original text
+            if (commentBtn) {
+                commentBtn.disabled = false;
+                if (originalBtnText) {
+                    commentBtn.innerHTML = originalBtnText;
+                }
+            }
         }
     }
 
@@ -1548,6 +1605,11 @@ class ModalManager {
 
     // Page comment functionality (for task detail page, not modal)
     async addPageComment() {
+        // Prevent duplicate submissions
+        if (this.isAddingPageComment) {
+            return;
+        }
+
         const textarea = document.getElementById('pageCommentTextarea');
         const comment = textarea.value.trim();
 
@@ -1556,7 +1618,24 @@ class ModalManager {
             return;
         }
 
+        // Find and disable the comment button
+        const commentBtn = document.querySelector('[data-action="addPageComment"]');
+        const originalBtnText = commentBtn ? commentBtn.innerHTML : null;
+
         try {
+            this.isAddingPageComment = true;
+            
+            // Disable button and show loading state
+            if (commentBtn) {
+                commentBtn.disabled = true;
+                commentBtn.innerHTML = `
+                    <svg class="task-btn-icon task-animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                    </svg>
+                    Adding...
+                `;
+            }
+
             // Use DB ID for API call if available
             const taskId = window.router.currentTaskDbId || window.router.currentTaskId;
             if (!taskId) {
@@ -1585,6 +1664,16 @@ class ModalManager {
         } catch (error) {
             console.error('Error adding page comment:', error);
             window.uiManager.showNotification('Failed to add comment', 'error');
+        } finally {
+            this.isAddingPageComment = false;
+            
+            // Re-enable button and restore original text
+            if (commentBtn) {
+                commentBtn.disabled = false;
+                if (originalBtnText) {
+                    commentBtn.innerHTML = originalBtnText;
+                }
+            }
         }
     }
 
