@@ -301,7 +301,7 @@ class App {
                                 
                                 <div class="input-group-modern">
                                     <label for="pageTaskAssignee" class="input-label">Assigned to</label>
-                                    <div class="task-assignee-multiselect">
+                                    <div class="multiselect-container task-assignee-multiselect">
                                         <div class="multiselect-display" data-multiselect-id="pageTaskAssigneeMulti">
                                             <span class="multiselect-text">Select assignees</span>
                                             <span class="multiselect-arrow">▼</span>
@@ -521,6 +521,7 @@ class App {
             });
             
             // Setup multi-select behavior for page
+            console.log('Setting up page assignee multi-select...');
             this.setupPageAssigneeMultiSelect();
         }
 
@@ -538,16 +539,33 @@ class App {
     }
     
     setupPageAssigneeMultiSelect() {
+        console.log('setupPageAssigneeMultiSelect: Starting setup...');
         const multiselectDisplay = document.querySelector('[data-multiselect-id="pageTaskAssigneeMulti"]');
         const dropdown = document.getElementById('pageTaskAssigneeDropdown');
+        
+        console.log('setupPageAssigneeMultiSelect: Elements found:', {
+            multiselectDisplay: !!multiselectDisplay,
+            dropdown: !!dropdown
+        });
         
         if (multiselectDisplay && dropdown) {
             // Toggle dropdown
             multiselectDisplay.removeEventListener('click', this.boundPageAssigneeHandler);
             this.boundPageAssigneeHandler = (event) => {
+                console.log('Page assignee dropdown clicked');
                 event.stopPropagation();
+                
+                // Toggle the container class (this controls CSS display)
+                const container = multiselectDisplay.closest('.multiselect-container');
+                if (container) {
+                    container.classList.toggle('open');
+                    console.log('Container open state:', container.classList.contains('open'));
+                }
+                
+                // Also toggle individual elements for debugging
                 dropdown.classList.toggle('open');
                 multiselectDisplay.classList.toggle('open');
+                console.log('Dropdown open state:', dropdown.classList.contains('open'));
             };
             multiselectDisplay.addEventListener('click', this.boundPageAssigneeHandler);
             
@@ -557,6 +575,10 @@ class App {
                 const isClickInsideDisplay = multiselectDisplay.contains(event.target);
                 
                 if (!isClickInsideDropdown && !isClickInsideDisplay) {
+                    const container = multiselectDisplay.closest('.multiselect-container');
+                    if (container) {
+                        container.classList.remove('open');
+                    }
                     dropdown.classList.remove('open');
                     multiselectDisplay.classList.remove('open');
                 }
@@ -577,6 +599,10 @@ class App {
                 if (event.key === 'Escape' && dropdown.classList.contains('open')) {
                     event.preventDefault();
                     event.stopPropagation(); // Prevent page navigation
+                    const container = multiselectDisplay.closest('.multiselect-container');
+                    if (container) {
+                        container.classList.remove('open');
+                    }
                     dropdown.classList.remove('open');
                     multiselectDisplay.classList.remove('open');
                 }
