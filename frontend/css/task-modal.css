@@ -562,6 +562,27 @@
     line-height: 1.5;
 }
 
+/* Comment source badges */
+.comment-source {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.comment-source.slack {
+    background: #4A154B;
+    color: white;
+}
+
+.comment-source.web {
+    background: var(--kirana-primary);
+    color: white;
+}
+
 .task-activity-changes {
     margin-top: 8px;
     padding: 8px 12px;
@@ -569,6 +590,14 @@
     border-radius: 8px;
     font-size: 13px;
     color: var(--gray-600);
+}
+
+.task-no-data {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--gray-500);
+    font-size: 14px;
+    font-style: italic;
 }
 
 /* Comments Section */

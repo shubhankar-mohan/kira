@@ -67,8 +67,13 @@ class Router {
         return paths[page] || '/dashboard';
     }
 
-    navigateToPage(page, updateHistory = true) {
-        console.log('Navigating to page:', page);
+    navigateToPage(page, updateHistory = true, taskId = null) {
+        console.log('Navigating to page:', page, taskId ? `(taskId: ${taskId})` : '');
+        
+        // If taskId is provided, set it
+        if (taskId) {
+            this.currentTaskId = taskId;
+        }
         
         // Handle special case for task detail page
         if (page === 'task-detail' && this.currentTaskId) {

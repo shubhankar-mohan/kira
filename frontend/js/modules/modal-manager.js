@@ -246,6 +246,12 @@ class ModalManager {
             case 'clearComment':
                 this.clearComment();
                 break;
+            case 'addPageComment':
+                this.addPageComment();
+                break;
+            case 'clearPageComment':
+                this.clearPageComment();
+                break;
             case 'deleteTask':
                 this.deleteTask();
                 break;
@@ -710,7 +716,15 @@ class ModalManager {
                 window.uiManager?.showNotification(message, 'error');
                 return;
             }
-            window.uiManager?.showNotification('Task created successfully!', 'success');
+            
+            // Show success notification with shareable link
+            if (result.data && (result.data.shortId || result.data.id)) {
+                const taskId = result.data.shortId || result.data.id;
+                const shareableLink = window.config.getTaskUrl(taskId);
+                window.uiManager?.showTaskCreatedNotification(taskId, shareableLink);
+            } else {
+                window.uiManager?.showNotification('Task created successfully!', 'success');
+            }
         } finally {
             this.isCreatingTask = false;
             this.resetButtonState(createBtn, originalContent);
@@ -1357,6 +1371,54 @@ class ModalManager {
 
     clearComment() {
         const textarea = document.getElementById('taskCommentTextarea');
+        textarea.value = '';
+        textarea.style.height = 'auto';
+    }
+
+    // Page comment functionality (for task detail page, not modal)
+    async addPageComment() {
+        const textarea = document.getElementById('pageCommentTextarea');
+        const comment = textarea.value.trim();
+
+        if (!comment) {
+            window.uiManager.showNotification('Please enter a comment', 'error');
+            return;
+        }
+
+        try {
+            // Use DB ID for API call if available
+            const taskId = window.router.currentTaskDbId || window.router.currentTaskId;
+            if (!taskId) {
+                window.uiManager.showNotification('No task selected', 'error');
+                return;
+            }
+
+            const currentUser = window.authManager?.currentUser;
+            if (!currentUser) {
+                window.uiManager.showNotification('User not authenticated', 'error');
+                return;
+            }
+
+            const response = await api.addComment(taskId, comment, currentUser.name || currentUser.email, currentUser.email);
+
+            if (response && response.success) {
+                // Refresh comments on the page using DB ID
+                await window.app.loadPageComments(taskId);
+                // Reset input
+                textarea.value = '';
+                textarea.style.height = 'auto';
+                window.uiManager.showNotification('Comment added successfully!', 'success');
+            } else {
+                throw new Error(response.error || 'Failed to add comment');
+            }
+        } catch (error) {
+            console.error('Error adding page comment:', error);
+            window.uiManager.showNotification('Failed to add comment', 'error');
+        }
+    }
+
+    clearPageComment() {
+        const textarea = document.getElementById('pageCommentTextarea');
         textarea.value = '';
         textarea.style.height = 'auto';
     }

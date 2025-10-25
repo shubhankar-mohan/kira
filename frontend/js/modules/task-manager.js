@@ -202,7 +202,8 @@ class TaskManager {
                 if (window.modalManager) {
                     window.modalManager.closeModal('createTaskModal', { force: true });
                 }
-                return { success: true };
+                // Return the created task data
+                return { success: true, data: response.data };
             }
             return { success: false, error: response.error || 'Failed to create task.' };
         } catch (error) {

@@ -43,6 +43,33 @@ class UIManager {
         }
     }
 
+    showTaskCreatedNotification(taskId, shareableLink) {
+        const notification = document.getElementById('notification');
+        if (notification) {
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; justify-content: space-between;">
+                    <div>
+                        <strong>Task ${taskId} created!</strong>
+                        <div style="font-size: 12px; margin-top: 4px; opacity: 0.9;">
+                            <a href="${shareableLink}" target="_blank" style="color: inherit; text-decoration: underline;">${shareableLink}</a>
+                        </div>
+                    </div>
+                    <button onclick="navigator.clipboard.writeText('${shareableLink}').then(() => { this.textContent = '✓ Copied!'; setTimeout(() => this.textContent = 'Copy Link', 1000); })" 
+                            style="padding: 6px 12px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: white; cursor: pointer; white-space: nowrap; font-size: 12px; font-weight: 500;">
+                        Copy Link
+                    </button>
+                </div>
+            `;
+            notification.className = 'notification success';
+            notification.classList.add('show');
+            
+            // Keep it visible longer (6 seconds) so user has time to copy
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 6000);
+        }
+    }
+
     toggleProfileMenu() {
         const profileMenu = document.querySelector('.profile-menu');
         if (profileMenu) {

@@ -185,6 +185,7 @@ class App {
 
             const canonicalId = resolvedTask.shortId || resolvedTask.id;
             window.router.currentTaskId = canonicalId;
+            window.router.currentTaskDbId = resolvedTask.id; // Store actual DB ID for updates
 
             window.history.pushState({ page: 'task-detail', taskId: canonicalId }, '', `/task/${canonicalId}`);
             window.router.updateBreadcrumb(`Task ${canonicalId}`);
@@ -201,9 +202,11 @@ class App {
             if (formContainer) {
                 formContainer.innerHTML = this.createTaskDetailFormHTML(resolvedTask);
                 this.populateTaskDetailForm(resolvedTask);
+                
+                // Load comments and activity for the page
                 if (window.modalManager) {
-                    window.modalManager.loadTaskActivity(resolvedTask.id);
-                    window.modalManager.loadTaskComments(resolvedTask.id);
+                    this.loadPageComments(resolvedTask.id);
+                    this.loadPageActivity(resolvedTask.id);
                 }
             }
         } catch (err) {
@@ -217,7 +220,7 @@ class App {
 
     createTaskDetailFormHTML(task) {
         return `
-            <div class="task-detail-form-container">
+            <div class="task-detail-container">
                 <div class="task-details-header">
                     <div class="task-header-info">
                         <h3 class="task-title-large">Task Details</h3>
@@ -362,6 +365,60 @@ class App {
                             </div>
                         </div>
                     </form>
+                    
+                    <!-- Comments Section -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <h4 class="section-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                                Comments
+                            </h4>
+                        </div>
+                        
+                        <div class="task-comments-section">
+                            <div class="task-comment-input">
+                                <div class="task-comment-avatar" id="pageUserAvatar">U</div>
+                                <div class="task-comment-form">
+                                    <textarea 
+                                        class="task-comment-textarea" 
+                                        id="pageCommentTextarea"
+                                        placeholder="Add a comment..."
+                                        rows="3"
+                                    ></textarea>
+                                    <div class="task-comment-actions">
+                                        <button type="button" class="task-btn task-btn-sm task-btn-secondary" data-action="clearPageComment">Cancel</button>
+                                        <button type="button" class="task-btn task-btn-sm task-btn-primary" data-action="addPageComment">
+                                            <svg class="task-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                                <polygon points="22,2 15,22 11,13 2,9 22,2"></polygon>
+                                            </svg>
+                                            Comment
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="task-activity-feed" id="pageCommentsFeed">
+                                <!-- Comments will be populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Activity Log Section -->
+                    <div class="form-section">
+                        <div class="section-header">
+                            <h4 class="section-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"></polyline>
+                                </svg>
+                                Activity Log
+                            </h4>
+                        </div>
+                        <div class="task-activity-feed" id="pageActivityFeed">
+                            <!-- Activity will be populated dynamically -->
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="modern-footer">
@@ -373,14 +430,14 @@ class App {
                         <span>Auto-saved</span>
                     </div>
                     <div class="footer-actions">
-                        <button class="btn-modern btn-secondary" data-action="navigateTo" data-page="board">
+                        <button type="button" class="btn-modern btn-secondary" data-action="navigateTo" data-page="board">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                             </svg>
                             Cancel
                         </button>
-                        <button class="btn-modern btn-primary" data-action="saveTaskDetailsFromPage">
+                        <button type="button" class="btn-modern btn-primary" data-action="saveTaskDetailsFromPage">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                                 <polyline points="17,21 17,13 7,13 7,21"></polyline>
@@ -419,17 +476,11 @@ class App {
             document.getElementById('pageTaskSprint').value = task.sprintWeek;
         }
 
-        if (taskAssignee) {
-            const assigneeSelect = document.getElementById('pageTaskAssignee');
-            if (assigneeSelect) {
-                assigneeSelect.value = task.assignedTo || '';
-            }
+        // Update ID badge display
+        const idDisplay = document.querySelector('.task-id-badge');
+        if (idDisplay) {
+            idDisplay.textContent = task.shortId || task.id || 'NEW';
         }
-
-            const idDisplay = document.querySelector('.task-id-badge');
-            if (idDisplay) {
-                idDisplay.textContent = task.shortId || task.id || 'NEW';
-            }
     }
 
     populatePageTaskDropdowns() {
@@ -463,11 +514,14 @@ class App {
 
         try {
             window.uiManager.showLoading();
-            const response = await api.updateTask(window.router.currentTaskId, taskData);
+            // Use actual DB ID for update, not the shortId
+            const taskId = window.router.currentTaskDbId || window.router.currentTaskId;
+            const response = await api.updateTask(taskId, taskData);
             
             if (response.success) {
-                // Update local task
-                const taskIndex = window.taskManager.tasks.findIndex(t => t.id === window.router.currentTaskId);
+                // Update local task using DB ID
+                const dbId = window.router.currentTaskDbId || window.router.currentTaskId;
+                const taskIndex = window.taskManager.tasks.findIndex(t => t.id === dbId);
                 if (taskIndex !== -1) {
                     window.taskManager.tasks[taskIndex] = { ...window.taskManager.tasks[taskIndex], ...taskData };
                 }
@@ -499,6 +553,159 @@ class App {
 
     async sendSlackTaskUpdate(taskId, taskData) {
         return window.taskManager?.sendSlackTaskUpdate(taskId, taskData);
+    }
+
+    async loadPageComments(taskId) {
+        try {
+            // Use DB ID for API call if available
+            const apiTaskId = window.router.currentTaskDbId || taskId;
+            const response = await api.getTaskComments(apiTaskId);
+            const commentsFeed = document.getElementById('pageCommentsFeed');
+            
+            if (!commentsFeed) return;
+            
+            if (response.success && response.data && response.data.length > 0) {
+                commentsFeed.innerHTML = response.data.map(comment => {
+                    // Handle different API response field names
+                    const author = comment.authorName || comment.author || comment.user || 'Unknown';
+                    const text = comment.text || comment.comment || '';
+                    const timestamp = comment.createdAt || comment.timestamp;
+                    const avatar = author.charAt(0).toUpperCase();
+                    
+                    // Only show badge for Slack comments (hide for web/dashboard)
+                    const sourceBadge = comment.source && comment.source.toLowerCase() === 'slack' 
+                        ? '<span class="comment-source slack">Slack</span>' 
+                        : '';
+                    
+                    // Format timestamp
+                    const timeText = timestamp ? this.formatCommentTime(timestamp) : '';
+                    
+                    return `
+                        <div class="task-activity-item">
+                            <div class="task-activity-avatar">${avatar}</div>
+                            <div class="task-activity-content">
+                                <div class="task-activity-header">
+                                    <span class="task-activity-user">${this.escapeHtml(author)}</span>
+                                    ${sourceBadge}
+                                    <span class="task-activity-time">${timeText}</span>
+                                </div>
+                                <div class="task-activity-action">${this.escapeHtml(text).replace(/\n/g, '<br>')}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                commentsFeed.innerHTML = '<div class="task-no-data">No comments yet</div>';
+            }
+        } catch (error) {
+            console.error('Error loading page comments:', error);
+        }
+    }
+
+    async loadPageActivity(taskId) {
+        try {
+            // Use DB ID for API call if available
+            const apiTaskId = window.router.currentTaskDbId || taskId;
+            const response = await api.getTaskActivity(apiTaskId);
+            const activityFeed = document.getElementById('pageActivityFeed');
+            
+            if (!activityFeed) return;
+            
+            if (response.success && response.data && response.data.length > 0) {
+                activityFeed.innerHTML = response.data.map(activity => {
+                    const actionText = this.getActivityActionText(activity);
+                    return `
+                        <div class="task-activity-item">
+                            <div class="task-activity-icon ${activity.action}">
+                                ${this.getActivityIcon(activity.action)}
+                            </div>
+                            <div class="task-activity-content">
+                                <div class="task-activity-text">${actionText}</div>
+                                <div class="task-activity-time">${this.formatActivityTime(activity.timestamp)}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                activityFeed.innerHTML = '<div class="task-no-data">No activity yet</div>';
+            }
+        } catch (error) {
+            console.error('Error loading page activity:', error);
+        }
+    }
+
+    getActivityActionText(activity) {
+        const user = activity.userName || activity.user || 'Someone';
+        switch (activity.action) {
+            case 'created':
+                return `<strong>${user}</strong> created this task`;
+            case 'status':
+                return `<strong>${user}</strong> changed status to <span class="badge">${activity.newValue}</span>`;
+            case 'priority':
+                return `<strong>${user}</strong> changed priority to <span class="badge">${activity.newValue}</span>`;
+            case 'assignee':
+                return `<strong>${user}</strong> assigned to ${activity.newValue || 'Unassigned'}`;
+            case 'sprint':
+                return `<strong>${user}</strong> moved to sprint ${activity.newValue || 'None'}`;
+            default:
+                return `<strong>${user}</strong> updated ${activity.action}`;
+        }
+    }
+
+    getActivityIcon(action) {
+        const icons = {
+            created: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>',
+            status: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"></polyline></svg>',
+            priority: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
+            assignee: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
+            sprint: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,6 13.5,15.5 8.5,10.5 1,18"></polyline><polyline points="17,6 23,6 23,12"></polyline></svg>'
+        };
+        return icons[action] || icons.status;
+    }
+
+    formatActivityTime(timestamp) {
+        if (!timestamp) return 'Just now';
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        if (days < 7) return `${days}d ago`;
+        return date.toLocaleDateString();
+    }
+
+    formatCommentTime(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        if (days < 7) return `${days}d ago`;
+        
+        // For older comments, show formatted date
+        const month = date.toLocaleDateString('en-US', { month: 'short' });
+        const day = date.getDate();
+        const year = date.getFullYear();
+        const currentYear = now.getFullYear();
+        
+        return year === currentYear ? `${month} ${day}` : `${month} ${day}, ${year}`;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 
@@ -564,4 +771,4 @@ function toggleProfileMenu() {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new App();
-}); 
+}); // Cache bust: 1761334599

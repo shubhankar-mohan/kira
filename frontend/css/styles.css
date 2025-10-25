@@ -1756,27 +1756,56 @@ body {
 .task-detail-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 32px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--gray-200);
+    gap: 16px;
+    margin-bottom: 24px;
+    padding: 16px 24px;
+    background: var(--white);
+    border-radius: 12px;
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-sm);
 }
 
 .back-button {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
     font-weight: 500;
-    transition: all var(--duration-200) var(--ease-out);
+    color: var(--gray-700);
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    cursor: pointer;
 }
 
 .back-button:hover {
+    background: var(--gray-100);
+    border-color: var(--gray-300);
+    color: var(--gray-900);
+    transform: translateX(-2px);
+}
+
+.back-button svg {
+    transition: transform 0.2s ease;
+}
+
+.back-button:hover svg {
     transform: translateX(-2px);
 }
 
 .task-detail-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     color: var(--gray-500);
-    font-size: var(--text-sm);
+    font-size: 14px;
+    flex: 1;
+}
+
+.task-detail-breadcrumb span {
+    color: var(--gray-600);
 }
 
 .task-detail-breadcrumb span:last-child {
