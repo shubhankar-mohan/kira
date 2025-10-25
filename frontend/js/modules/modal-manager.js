@@ -22,6 +22,39 @@ class ModalManager {
         }
         this._listenersSetup = true;
         
+        // Close modal when pressing ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                // Find the topmost visible modal
+                const visibleModals = Array.from(document.querySelectorAll('.modal, .task-modal-overlay, .confirm-modal-overlay'))
+                    .filter(modal => {
+                        const styles = window.getComputedStyle(modal);
+                        return styles.display !== 'none' && modal.classList.contains('show');
+                    });
+                
+                if (visibleModals.length > 0) {
+                    const topmostModal = visibleModals[visibleModals.length - 1];
+                    
+                    // Handle confirm modal
+                    if (topmostModal.classList.contains('confirm-modal-overlay')) {
+                        this.hideConfirmModal(false);
+                        return;
+                    }
+                    
+                    // Handle task details modal
+                    if (topmostModal.id === 'taskDetailsModal') {
+                        this.closeTaskModal();
+                        return;
+                    }
+                    
+                    // Handle other modals
+                    if (topmostModal.id) {
+                        this.closeModal(topmostModal.id);
+                    }
+                }
+            }
+        });
+        
         // Close modal when clicking outside
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('task-modal-overlay')) {
@@ -735,6 +768,8 @@ class ModalManager {
                     // Re-populate dropdowns with latest data
                     await this.refreshCreateTaskDropdowns();
                     this.bindCreateTaskModalEvents(modal);
+                    // Setup assignee multiselect
+                    this.setupAssigneeMultiSelect();
                     // Ensure body exists/visible
                     const body = modal.querySelector('.task-modal-body');
                     if (body) body.style.display = '';

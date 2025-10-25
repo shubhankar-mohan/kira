@@ -15,7 +15,8 @@ function mapStatusToEnum(status) {
         'awaiting release': 'DEV_TESTING',
         'done': 'DONE',
         'blocked - product': 'PRODUCT_BLOCKED',
-        'blocked - engineering': 'ENGG_BLOCKED'
+        'blocked - engineering': 'ENGG_BLOCKED',
+        'not required': 'DONE'  // Map "Not Required" to DONE status
     };
     return map[normalized] || status;
 }

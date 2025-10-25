@@ -545,6 +545,7 @@ Light mode only - following the exact design specification
 .column.awaiting-release { border-left: 4px solid #f59e0b; }
 .column.done { border-left: 4px solid #10b981; }
 .column.blocked { border-left: 4px solid #ef4444; }
+.column.not-required { border-left: 4px solid #94a3b8; }
 
 /* ===== DRAG AND DROP ===== */
 .task-card.dragging {

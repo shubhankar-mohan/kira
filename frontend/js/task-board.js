@@ -11,9 +11,11 @@ class TaskBoardManager {
             { key: 'Not started', label: 'NOT STARTED', class: 'todo' },
             { key: 'In progress', label: 'IN PROGRESS', class: 'in-progress' },
             { key: 'Dev Testing', label: 'DEV TESTING', class: 'dev-testing' },
+            { key: 'Product Testing', label: 'PRODUCT TESTING', class: 'product-testing' },
             { key: 'Done', label: 'DONE', class: 'done' },
             { key: 'Blocked - Product', label: 'BLOCKED (PRODUCT)', class: 'blocked' },
-            { key: 'Blocked - Engineering', label: 'BLOCKED (ENGINEERING)', class: 'blocked' }
+            { key: 'Blocked - Engineering', label: 'BLOCKED (ENGINEERING)', class: 'blocked' },
+            { key: 'Not Required', label: 'NOT REQUIRED', class: 'not-required' }
         ];
         this.allTasks = [];
         this.filteredTasks = [];
