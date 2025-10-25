@@ -104,3 +104,14 @@ temp/
 # Config files with secrets
 config/production.js
 config/secrets.js
+
+# Temporary documentation (fix docs, implementation docs, etc.)
+*_FIX.md
+*_TEST.md
+*TEST*.md
+*_IMPLEMENTATION.md
+*_PLAN.md
+*_REPORT.md
+*CLAUDE*.md
+*TODO*.md
+GIT_CLEANUP*.md
