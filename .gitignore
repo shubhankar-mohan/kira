@@ -97,6 +97,9 @@ temp/
 *.sqlite
 *.db
 
+# MySQL data directory (Docker volumes)
+data/
+
 # Backup files
 *.backup
 *.bak
