@@ -1,6 +1,6 @@
-# 🏪 KiranaClub Task Manager
+# 🏪 Kira Task Manager
 
-A comprehensive task management system built specifically for KiranaClub with advanced Slack integration, sprint management, and team collaboration features. Transform your development workflow with intelligent automation and real-time synchronization.
+A comprehensive task management system with advanced Slack integration, sprint management, and team collaboration features. Transform your development workflow with intelligent automation and real-time synchronization.
 
 ## 🎯 What is Kira?
 
@@ -101,9 +101,9 @@ Kira is an intelligent task management platform designed for agile development t
 ### Demo Accounts
 Try Kira with these pre-configured demo accounts:
 
-- **Admin**: `admin@kirana.club` / `admin123`
-- **Manager**: `manager@kirana.club` / `manager123`
-- **Developer**: `dev@kirana.club` / `dev123`
+- **Admin**: `admin@example.com` / `admin123`
+- **Manager**: `manager@example.com` / `manager123`
+- **Developer**: `dev@example.com` / `dev123`
 
 ### Access the Application
 1. **Web Interface**: Navigate to your deployed URL
@@ -202,6 +202,6 @@ MIT License - feel free to customize for your organization's needs.
 
 ---
 
-**Built with ❤️ for KiranaClub Team**
+**Built with ❤️ for Agile Teams**
 
 *Transform your development workflow with intelligent task management and seamless Slack integration.*

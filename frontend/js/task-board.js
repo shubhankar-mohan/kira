@@ -1,5 +1,5 @@
 /* 
-🏪 KiranaClub Task Manager - Task Board JavaScript
+🏪 Kira Task Manager - Task Board JavaScript
 Professional task board with expand/collapse functionality
 */
 

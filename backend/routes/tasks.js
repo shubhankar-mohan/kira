@@ -184,12 +184,29 @@ router.put('/:id', async (req, res) => {
             type: mapTypeToEnum(req.body.type)
         };
         
-        const updatedTask = await db.updateTask(req.params.id, updates);
+        // Support lookup by shortId pattern kira-XXXXXX
+        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
+        let task = null;
+        const tasks = await db.getTasks();
+        if (isShort) {
+            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
+        } else {
+            task = tasks.find(t => t.id === req.params.id);
+        }
+        
+        if (!task) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Task not found' 
+            });
+        }
+        
+        const updatedTask = await db.updateTask(task.id, updates); // Use the actual database ID
         // Record activity for updates
         try {
             const fields = Object.keys(updates).filter(k => !['lastEditedBy'].includes(k));
             await db.addActivity({
-                taskId: req.params.id,
+                taskId: task.id, // Use the actual database ID
                 user: updates.lastEditedBy,
                 action: 'updated',
                 details: fields.length > 0 ? `Fields: ${fields.join(', ')}` : 'Task updated',
@@ -221,7 +238,24 @@ router.put('/:id', async (req, res) => {
 // Delete task
 router.delete('/:id', async (req, res) => {
     try {
-        await db.deleteTask(req.params.id);
+        // Support lookup by shortId pattern kira-XXXXXX
+        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
+        let task = null;
+        const tasks = await db.getTasks();
+        if (isShort) {
+            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
+        } else {
+            task = tasks.find(t => t.id === req.params.id);
+        }
+        
+        if (!task) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Task not found' 
+            });
+        }
+        
+        await db.deleteTask(task.id); // Use the actual database ID
         
         res.json({
             success: true,
@@ -254,7 +288,22 @@ router.post('/:id/comments', async (req, res) => {
         }
 
         const tasks = await db.getTasks();
-        const task = tasks.find(t => t.id === req.params.id);
+        
+        // Support lookup by shortId pattern kira-XXXXXX
+        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
+        let task = null;
+        if (isShort) {
+            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
+        } else {
+            task = tasks.find(t => t.id === req.params.id);
+        }
+        
+        if (!task) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Task not found' 
+            });
+        }
 
         let slackMessageTs = '';
         let slackChannelId = '';
@@ -288,6 +337,7 @@ router.post('/:id/comments', async (req, res) => {
         // Add a single comment row in Sheets with Slack metadata if available
         const newComment = await db.addComment({
             ...commentData,
+            taskId: task.id, // Use the actual database ID, not the display ID
             source: 'web',
             slackMessageTs,
             slackChannelId
@@ -295,7 +345,7 @@ router.post('/:id/comments', async (req, res) => {
         // Record activity for comment
         try {
             await db.addActivity({
-                taskId: req.params.id,
+                taskId: task.id, // Use the actual database ID, not the display ID
                 user: newComment.user,
                 action: 'commented',
                 details: newComment.comment,
@@ -320,7 +370,24 @@ router.post('/:id/comments', async (req, res) => {
 // List comments for a task
 router.get('/:id/comments', async (req, res) => {
     try {
-        const items = await db.getComments(req.params.id);
+        // Support lookup by shortId pattern kira-XXXXXX
+        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
+        let task = null;
+        const tasks = await db.getTasks();
+        if (isShort) {
+            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
+        } else {
+            task = tasks.find(t => t.id === req.params.id);
+        }
+        
+        if (!task) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Task not found' 
+            });
+        }
+        
+        const items = await db.getComments(task.id); // Use the actual database ID
         // newest first
         items.sort((a, b) => (new Date(b.timestamp).getTime()||0) - (new Date(a.timestamp).getTime()||0));
         res.json({ success: true, data: items });

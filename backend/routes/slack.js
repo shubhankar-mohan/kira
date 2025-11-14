@@ -1,9 +1,9 @@
 const express = require('express');
+const { getAppName, getFrontendBaseUrl } = require('../config/appConfig');
 const router = express.Router();
 const crypto = require('crypto');
 const axios = require('axios');
 const { authenticateToken } = require('./auth');
-const { getFrontendBaseUrl } = require('../config/appConfig');
 const slackService = require('../services/slackService');
 const db = require('../services/dbAdapter');
 
@@ -213,7 +213,7 @@ router.post('/notify', authenticateToken, async (req, res) => {
         const messageOptions = {
             channel: targetChannel,
             text: message,
-            username: 'KiranaClub TaskManager',
+            username: `${getAppName()}`,
             icon_emoji: ':office:'
         };
 
@@ -486,7 +486,7 @@ router.post('/task-updated', authenticateToken, async (req, res) => {
         const messageOptions = {
             channel: targetChannel,
             blocks: blocks,
-            username: 'KiranaClub TaskManager',
+            username: `${getAppName()}`,
             icon_emoji: ':office:'
         };
 

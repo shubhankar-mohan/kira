@@ -1,12 +1,12 @@
 /* Enhanced Task Modal Design System for Kira Task Manager */
 
 :root {
-    --kirana-primary: #4f46e5;
-    --kirana-primary-light: #6366f1;
-    --kirana-primary-dark: #4338ca;
-    --kirana-secondary: #f59e0b;
-    --kirana-accent: #8b5cf6;
-    --kirana-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
+    --primary: #4f46e5;
+    --primary-light: #6366f1;
+    --primary-dark: #4338ca;
+    --secondary: #f59e0b;
+    --accent: #8b5cf6;
+    --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
     
     /* Status Colors */
     --success: #10b981;
@@ -99,7 +99,7 @@
 
 /* Task Header with Status */
 .task-modal-header {
-    background: var(--kirana-gradient);
+    background: var(--brand-gradient);
     color: white;
     padding: 32px 32px 24px 32px;
     position: relative;
@@ -270,8 +270,8 @@
 }
 
 .task-tab-button.active {
-    color: var(--kirana-primary);
-    border-bottom-color: var(--kirana-primary);
+    color: var(--primary);
+    border-bottom-color: var(--primary);
     background: var(--white);
 }
 
@@ -329,7 +329,7 @@
 .task-section-icon {
     width: 20px;
     height: 20px;
-    color: var(--kirana-primary);
+    color: var(--primary);
 }
 
 .task-section-title {
@@ -386,7 +386,7 @@
 
 .task-form-input:focus, .task-form-select:focus, .task-form-textarea:focus {
     outline: none;
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
     transform: translateY(-1px);
 }
@@ -445,7 +445,7 @@
 
 .task-metadata-input:focus, .task-metadata-select:focus {
     outline: none;
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
     transform: translateY(-1px);
 }
@@ -525,7 +525,7 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: white;
     display: flex;
     align-items: center;
@@ -579,7 +579,7 @@
 }
 
 .comment-source.web {
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: white;
 }
 
@@ -615,7 +615,7 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: white;
     display: flex;
     align-items: center;
@@ -643,7 +643,7 @@
 
 .task-comment-textarea:focus {
     outline: none;
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
 }
 
@@ -712,7 +712,7 @@
 }
 
 .task-btn-primary {
-    background: var(--kirana-gradient);
+    background: var(--brand-gradient);
     color: white;
     border: 2px solid transparent;
     box-shadow: var(--shadow-lg);

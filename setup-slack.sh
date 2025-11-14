@@ -1,16 +1,16 @@
 #!/bin/bash
 
 # Kira Task Manager - Slack Integration Setup Script
-# Created by Shubhankar Mohan for KiranaClub
+# Created by Shubhankar Mohan
 
 echo "🤖 Kira Task Manager - Slack Integration Setup"
 echo "=============================================="
 echo
 
 # Check if .env file exists
-if [ ! -f "backend/.env" ]; then
+if [ ! -f ".env" ]; then
     echo "📝 Creating .env file from template..."
-    cp backend/.env.example backend/.env
+    cp .env.example .env
     echo "✅ .env file created. Please edit it with your credentials."
     echo
 fi
@@ -44,7 +44,7 @@ else
         echo "   - $var"
     done
     echo
-    echo "Please update these variables in backend/.env before proceeding."
+    echo "Please update these variables in .env before proceeding."
 fi
 
 echo

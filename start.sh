@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# KiranaClub Task Manager Startup Script (Single Server)
+# Kira Task Manager Startup Script (Single Server)
 
-echo "🏪 Starting KiranaClub Task Manager..."
+echo "🏪 Starting Kira Task Manager..."
 echo "🔄 Single server mode: Backend serves frontend on port 3001"
 
 # Check if Node.js is installed
@@ -68,9 +68,9 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-# Ensure backend/.env exists with DB defaults if missing
+# Ensure .env exists with DB defaults if missing
 if [ ! -f ".env" ]; then
-    echo "⚠️  backend/.env not found. Creating with database defaults..."
+    echo "⚠️  .env not found. Creating with database defaults..."
     cat > .env <<EOF
 DB_TYPE=${DB_TYPE}
 DB_HOST=${DB_HOST}
@@ -114,7 +114,7 @@ if lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
 fi
 
 # Start the single server (backend serves frontend)
-echo "🚀 Starting KiranaClub Task Manager on port 3001..."
+echo "🚀 Starting Kira Task Manager on port 3001..."
 echo "🔄 Backend will serve frontend files with client-side routing"
 npm start &
 SERVER_PID=$!
@@ -145,15 +145,15 @@ else
 fi
 
 echo ""
-echo "🎉 KiranaClub Task Manager is now running!"
+echo "🎉 Kira Task Manager is now running!"
 echo "📱 Application: http://localhost:3001"
 echo "📊 Health Check: http://localhost:3001/health"
 echo "🔌 API Endpoints: http://localhost:3001/api/*"
 echo ""
 echo "🔐 Demo Login Credentials:"
-echo "   Admin: admin@kirana.club / admin123"
-echo "   Manager: manager@kirana.club / manager123"
-echo "   Developer: dev@kirana.club / dev123"
+echo "   Admin: admin@example.com / admin123"
+echo "   Manager: manager@example.com / manager123"
+echo "   Developer: dev@example.com / dev123"
 echo ""
 echo "📋 Available URLs:"
 echo "   Dashboard: http://localhost:3001/dashboard"

@@ -1,6 +1,6 @@
 display_information:
   name: Kira Task Manager
-  description: Intelligent task management and scrum automation for KiranaClub
+  description: Intelligent task management and scrum automation
   background_color: "#4f46e5"
 features:
   app_home:

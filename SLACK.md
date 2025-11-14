@@ -303,7 +303,7 @@ One-click task management with interactive buttons:
 
 3. **Configure App Settings**
    - **App Name**: Kira Task Manager
-   - **Description**: Intelligent task management for KiranaClub
+   - **Description**: Intelligent task management system
    - **Icon**: Upload your company logo (recommended 512x512)
 
 ### Step 2: OAuth & Permissions
@@ -618,4 +618,4 @@ The implementation follows modern software engineering best practices, ensuring 
 
 ---
 
-*Created with ❤️ by Shubhankar Mohan for KiranaClub*
+*Created with ❤️ by Shubhankar Mohan*

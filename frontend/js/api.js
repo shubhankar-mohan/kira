@@ -1,4 +1,4 @@
-// API Service for KiranaClub Task Manager
+// API Service for Kira Task Manager
 class APIService {
     constructor() {
         // Use relative URL for single server deployment

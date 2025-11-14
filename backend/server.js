@@ -1,10 +1,10 @@
-require('dotenv').config();
+require('dotenv').config({ path: '../.env' });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path'); // Added for path.join
-const { getFrontendBaseUrl } = require('./config/appConfig');
+const { getFrontendBaseUrl, getAppName } = require('./config/appConfig');
 
 // Route imports
 const tasksRouter = require('./routes/tasks');
@@ -179,7 +179,7 @@ app.get('/api/health/database', async (req, res) => {
 // API info endpoint
 app.get('/api', (req, res) => {
     res.json({ 
-        message: 'KiranaClub Task Manager API',
+        message: `${getAppName()} API`,
         version: '1.0.0',
         endpoints: {
             health: '/health',
@@ -216,7 +216,7 @@ app.get('*', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`🚀 KiranaClub Task Manager running on port ${PORT}`);
+    console.log(`🚀 ${getAppName()} running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
     console.log(`📋 API docs: http://localhost:${PORT}/api`);

@@ -1,17 +1,17 @@
 /* 
-🏪 KiranaClub Task Manager - Base Styles
+🏪 Kira Task Manager - Base Styles
 Variables, Reset, Typography, and Core Layout
 */
 
 /* ===== DESIGN TOKENS ===== */
 :root {
     /* Brand Identity */
-    --kirana-primary: #4f46e5;
-    --kirana-primary-light: #6366f1;
-    --kirana-primary-dark: #4338ca;
-    --kirana-secondary: #f59e0b;
-    --kirana-accent: #8b5cf6;
-    --kirana-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
+    --primary: #4f46e5;
+    --primary-light: #6366f1;
+    --primary-dark: #4338ca;
+    --secondary: #f59e0b;
+    --accent: #8b5cf6;
+    --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
     
     /* Status Colors */
     --status-not-started: #64748b;
@@ -148,13 +148,13 @@ p {
 }
 
 a {
-    color: var(--kirana-primary);
+    color: var(--primary);
     text-decoration: none;
     transition: color var(--duration-150) var(--ease-out);
 }
 
 a:hover {
-    color: var(--kirana-primary-dark);
+    color: var(--primary-dark);
     text-decoration: underline;
 }
 

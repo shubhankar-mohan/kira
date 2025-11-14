@@ -20,7 +20,7 @@ COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 
 # Create production environment file
-RUN echo "NODE_ENV=production" > ./backend/.env
+RUN echo "NODE_ENV=production" > ./.env
 
 # Set working directory to backend
 WORKDIR /app/backend

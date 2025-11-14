@@ -1,4 +1,4 @@
-// Event Handlers for KiranaClub Task Manager
+// Event Handlers for Kira Task Manager
 // This file replaces all inline event handlers to comply with CSP
 
 class EventHandlerManager {
@@ -25,15 +25,15 @@ class EventHandlerManager {
                 
                 switch(role) {
                     case 'admin':
-                        email = 'admin@kirana.club';
+                        email = 'admin@example.com';
                         password = 'admin123';
                         break;
                     case 'manager':
-                        email = 'manager@kirana.club';
+                        email = 'manager@example.com';
                         password = 'manager123';
                         break;
                     case 'developer':
-                        email = 'dev@kirana.club';
+                        email = 'dev@example.com';
                         password = 'dev123';
                         break;
                     default:

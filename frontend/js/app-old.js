@@ -1,4 +1,4 @@
-// KiranaClub Task Manager - Main Application
+// Kira Task Manager - Main Application
 class TaskManager {
     constructor() {
         console.log('🚀 TaskManager v4.0 - Multi-Page Router Version');

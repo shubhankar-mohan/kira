@@ -1,4 +1,4 @@
-🏪 Starting KiranaClub Task Manager...
+🏪 Starting Kira Task Manager...
 🔄 Single server mode: Backend serves frontend on port 3001
 ✅ Node.js version: v18.20.5
 🗄️  Ensuring data directories exist...
@@ -56,7 +56,7 @@ Running generate... (Use --skip-generate to skip the generators)
 > kira-backend@1.0.0 prisma:seed
 > node prisma/seed.js
 
-🚀 Starting KiranaClub Task Manager on port 3001...
+🚀 Starting Kira Task Manager on port 3001...
 🔄 Backend will serve frontend files with client-side routing
 
 > kira-backend@1.0.0 start
@@ -92,15 +92,15 @@ Node.js v18.20.5
 ✅ Database health OK!
 ✅ Frontend is being served correctly!
 
-🎉 KiranaClub Task Manager is now running!
+🎉 Kira Task Manager is now running!
 📱 Application: http://localhost:3001
 📊 Health Check: http://localhost:3001/health
 🔌 API Endpoints: http://localhost:3001/api/*
 
 🔐 Demo Login Credentials:
-   Admin: admin@kirana.club / admin123
-   Manager: manager@kirana.club / manager123
-   Developer: dev@kirana.club / dev123
+   Admin: admin@abc.club / admin123
+   Manager: manager@abc.club / manager123
+   Developer: dev@abc.club / dev123
 
 📋 Available URLs:
    Dashboard: http://localhost:3001/dashboard

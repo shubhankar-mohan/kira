@@ -56,11 +56,13 @@ cd /path/to/kira
 cd backend
 npm install
 
-# Set up environment variables
+# Set up environment variables (from root directory)
+cd ..
 cp .env.example .env
 # Edit .env with your configuration
 
 # Start backend server
+cd backend
 npm run dev
 ```
 
@@ -292,13 +294,13 @@ redis-cli ping
 
 ### Step 1: Create Google Cloud Project
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project: "KiranaClub-TaskManager"
+2. Create a new project: "Kira-TaskManager"
 3. Enable Google Sheets API and Google Drive API
 
 ### Step 2: Create Service Account
 1. Navigate to **APIs & Services > Credentials**
 2. Click **Create Credentials > Service Account**
-3. Name: `kirana-task-manager`
+3. Name: `kira-task-manager`
 4. Grant **Editor** role
 5. Create and download JSON key file
 

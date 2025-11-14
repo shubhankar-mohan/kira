@@ -12,7 +12,7 @@ yarn-error.log*
 .env.production.local
 
 # Logs
-logs
+logs/
 *.log
 
 # Runtime data
@@ -118,3 +118,8 @@ config/secrets.js
 *CLAUDE*.md
 *TODO*.md
 GIT_CLEANUP*.md
+
+# Backend specific
+backend/logs/
+backend/node_modules/
+backend/package-lock.json

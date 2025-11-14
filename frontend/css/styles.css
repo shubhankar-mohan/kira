@@ -1,5 +1,5 @@
 /* 
-🏪 KiranaClub Task Manager - Consolidated Styles
+🏪 Kira Task Manager - Consolidated Styles
 Design System: Modern, Elegant, Professional
 Built for: Scrum Masters & Development Teams
 */
@@ -7,12 +7,12 @@ Built for: Scrum Masters & Development Teams
 /* ===== DESIGN TOKENS ===== */
 :root {
     /* Brand Identity */
-    --kirana-primary: #4f46e5;
-    --kirana-primary-light: #6366f1;
-    --kirana-primary-dark: #4338ca;
-    --kirana-secondary: #f59e0b;
-    --kirana-accent: #8b5cf6;
-    --kirana-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
+    --primary: #4f46e5;
+    --primary-light: #6366f1;
+    --primary-dark: #4338ca;
+    --secondary: #f59e0b;
+    --accent: #8b5cf6;
+    --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
     
     /* Status Colors */
     --status-not-started: #64748b;
@@ -227,7 +227,7 @@ body {
 
 .search-box:focus {
     outline: none;
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
@@ -262,7 +262,7 @@ body {
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: var(--white);
     display: flex;
     align-items: center;
@@ -368,7 +368,7 @@ body {
 }
 
 .btn {
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: var(--white);
     border: none;
     border-radius: 6px;
@@ -384,12 +384,12 @@ body {
 }
 
 .btn:hover {
-    background: var(--kirana-primary-dark);
+    background: var(--primary-dark);
     transform: translateY(-1px);
 }
 
 .btn:focus-visible {
-    outline: 2px solid var(--kirana-primary);
+    outline: 2px solid var(--primary);
     outline-offset: 2px;
 }
 
@@ -482,8 +482,8 @@ body {
 }
 
 .filter-btn:hover, .view-btn:hover {
-    border-color: var(--kirana-primary);
-    color: var(--kirana-primary);
+    border-color: var(--primary);
+    color: var(--primary);
 }
 
 /* ===== MAIN CONTENT ===== */
@@ -536,7 +536,7 @@ body {
 }
 
 .nav-item.active {
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: var(--white);
 }
 
@@ -573,7 +573,7 @@ body {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: var(--white);
     display: flex;
     align-items: center;
@@ -731,7 +731,7 @@ body {
     left: 0;
     right: 0;
     height: 4px;
-    background: var(--kirana-gradient);
+    background: var(--brand-gradient);
     border-radius: 8px 8px 0 0;
 }
 
@@ -741,7 +741,7 @@ body {
 }
 
 .stat-card:hover::before {
-    background: var(--kirana-primary);
+    background: var(--primary);
 }
 
 .stat-icon {
@@ -946,7 +946,7 @@ body {
     width: 40px;
     height: 40px;
     border: 3px solid var(--gray-200);
-    border-top: 3px solid var(--kirana-primary);
+    border-top: 3px solid var(--primary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin-bottom: 16px;
@@ -1119,7 +1119,7 @@ body {
 }
 
 .multiselect-display:focus-within {
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
     outline: none;
 }
@@ -1218,7 +1218,7 @@ body {
 /* Enhanced Task Details Header */
 
 .task-details-header {
-    background: linear-gradient(135deg, var(--kirana-primary) 0%, var(--kirana-primary-light) 50%, var(--kirana-accent) 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 50%, var(--accent) 100%);
     color: white;
     border-radius: 12px 12px 0 0;
     padding: 32px 28px;
@@ -1362,7 +1362,7 @@ body {
 }
 
 .sprint-header {
-    background: linear-gradient(135deg, var(--kirana-accent) 0%, var(--kirana-primary) 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
     color: white;
     border-radius: 8px 8px 0 0;
     padding: 24px;
@@ -1417,7 +1417,7 @@ body {
 }
 
 .section-title svg {
-    color: var(--kirana-primary);
+    color: var(--primary);
 }
 
 /* Modern Form Grid */
@@ -1458,7 +1458,7 @@ body {
 
 .input-modern:focus {
     outline: none;
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
     transform: translateY(-1px);
 }
@@ -1501,7 +1501,7 @@ body {
 
 .select-modern:focus {
     outline: none;
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
@@ -1530,7 +1530,7 @@ body {
 
 .textarea-modern:focus {
     outline: none;
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
@@ -1655,12 +1655,12 @@ body {
 }
 
 .btn-modern.btn-primary {
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: white;
 }
 
 .btn-modern.btn-primary:hover {
-    background: var(--kirana-primary-dark);
+    background: var(--primary-dark);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
 }
@@ -1864,7 +1864,7 @@ body {
 }
 
 .input-group-modern:focus-within .input-label {
-    color: var(--kirana-primary);
+    color: var(--primary);
     font-weight: 500;
 }
 
@@ -2109,12 +2109,12 @@ body {
 }
 
 .confirm-btn-confirm.primary {
-    background: linear-gradient(135deg, var(--kirana-primary) 0%, var(--kirana-primary-dark) 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
 }
 
 .confirm-btn-confirm.primary:hover {
-    background: linear-gradient(135deg, var(--kirana-primary-dark) 0%, #3730a3 100%);
+    background: linear-gradient(135deg, var(--primary-dark) 0%, #3730a3 100%);
     box-shadow: 0 6px 8px -1px rgba(79, 70, 229, 0.3);
 }
 
@@ -2219,13 +2219,13 @@ body {
 }
 
 .sprint-strip:hover {
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
 }
 
 .sprint-strip.current-sprint {
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     background: linear-gradient(135deg, rgba(79, 70, 229, 0.03) 0%, rgba(139, 92, 246, 0.03) 100%);
 }
 
@@ -2303,7 +2303,7 @@ body {
 }
 
 .completion-rate .stat-value {
-    color: var(--kirana-primary);
+    color: var(--primary);
 }
 
 .sprint-actions {
@@ -2356,7 +2356,7 @@ body {
 }
 
 .sprint-card:hover {
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
     transform: translateY(-2px);
 }
@@ -2367,7 +2367,7 @@ body {
 }
 
 .sprint-card.current-sprint {
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     background: linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
 }
 
@@ -2378,7 +2378,7 @@ body {
     left: 0;
     right: 0;
     height: 3px;
-    background: var(--kirana-gradient);
+    background: var(--brand-gradient);
     border-radius: 12px 12px 0 0;
 }
 
@@ -2402,7 +2402,7 @@ body {
 }
 
 .current-badge {
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: white;
     padding: 4px 8px;
     border-radius: 6px;
@@ -2455,7 +2455,7 @@ body {
 }
 
 .user-card:hover {
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
     transform: translateY(-2px);
 }
@@ -2477,7 +2477,7 @@ body {
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: var(--kirana-gradient);
+    background: var(--brand-gradient);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2580,9 +2580,9 @@ body {
 }
 
 .current-sprint-toggle .btn.btn-primary {
-    background: var(--kirana-primary);
+    background: var(--primary);
     color: white;
-    border-color: var(--kirana-primary);
+    border-color: var(--primary);
 }
 
 /* ===== DASHBOARD CURRENT SPRINT OVERVIEW ===== */
@@ -2749,7 +2749,7 @@ body {
 
 .stat-card.current-sprint {
     background: var(--white);
-    border: 2px solid var(--kirana-primary);
+    border: 2px solid var(--primary);
     border-radius: 12px;
     padding: 24px;
     text-align: center;
@@ -2757,7 +2757,7 @@ body {
 }
 
 .stat-card.current-sprint:hover {
-    border-color: var(--kirana-secondary);
+    border-color: var(--secondary);
     box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
     transform: translateY(-2px);
 }
@@ -2911,7 +2911,7 @@ body {
     font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 600;
-    color: var(--kirana-primary);
+    color: var(--primary);
     background: var(--gray-100);
     padding: 4px 8px;
     border-radius: 4px;

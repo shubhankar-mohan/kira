@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# KiranaClub Task Manager Docker Deployment Script
+# Kira Task Manager Docker Deployment Script
 
-echo "🚀 Deploying KiranaClub Task Manager with Docker..."
+echo "🚀 Deploying Kira Task Manager with Docker..."
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
@@ -50,7 +50,7 @@ docker-compose up -d
 
 if [ $? -eq 0 ]; then
     echo ""
-    echo "🎉 KiranaClub Task Manager is now running!"
+    echo "🎉 Kira Task Manager is now running!"
     echo "📱 Application: http://localhost:3001"
     echo "📊 Health Check: http://localhost:3001/health"
     echo ""
@@ -61,9 +61,9 @@ if [ $? -eq 0 ]; then
     echo "   Update: docker-compose pull && docker-compose up -d"
     echo ""
     echo "🔐 Demo Login Credentials:"
-    echo "   Admin: admin@kirana.club / admin123"
-    echo "   Manager: manager@kirana.club / manager123"
-    echo "   Developer: dev@kirana.club / dev123"
+echo "   Admin: admin@example.com / admin123"
+echo "   Manager: manager@example.com / manager123"
+echo "   Developer: dev@example.com / dev123"
 else
     echo "❌ Failed to start application. Check the logs above."
     exit 1

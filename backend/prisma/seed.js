@@ -1,10 +1,12 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+const { getEmailDomain } = require('../config/appConfig');
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@kira.local';
-  const adminName = process.env.SEED_ADMIN_NAME || 'Kira Admin';
+  const emailDomain = getEmailDomain();
+  const adminEmail = process.env.SEED_ADMIN_EMAIL || `admin@${emailDomain}`;
+  const adminName = process.env.SEED_ADMIN_NAME || 'Admin';
 
   // Upsert admin user
   const admin = await prisma.user.upsert({
@@ -15,9 +17,9 @@ async function main() {
 
   // Upsert demo login accounts shown on the login page
   const demoUsers = [
-    { email: 'admin@kirana.club', name: 'Admin', role: 'Admin', password: 'admin123' },
-    { email: 'manager@kirana.club', name: 'Manager', role: 'Manager', password: 'manager123' },
-    { email: 'dev@kirana.club', name: 'Developer', role: 'Developer', password: 'dev123' }
+    { email: `admin@${emailDomain}`, name: 'Admin', role: 'Admin', password: 'admin123' },
+    { email: `manager@${emailDomain}`, name: 'Manager', role: 'Manager', password: 'manager123' },
+    { email: `dev@${emailDomain}`, name: 'Developer', role: 'Developer', password: 'dev123' }
   ];
 
   for (const du of demoUsers) {

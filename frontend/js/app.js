@@ -1,4 +1,4 @@
-// KiranaClub Task Manager - Main Application (Modular Version)
+// Kira Task Manager - Main Application (Modular Version)
 class App {
     constructor() {
         console.log('🚀 App v5.0 - Modular Version');
