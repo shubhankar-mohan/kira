@@ -24,12 +24,21 @@ if [ ! -f ".env" ]; then
     echo "⚠️  .env file not found. Creating from example..."
     if [ -f ".env.example" ]; then
         cp .env.example .env
-        echo "📝 Please edit .env with your production credentials before continuing."
+        echo "✅ .env file created with Docker container defaults"
+        echo "📝 Edit .env to customize database passwords and add Slack tokens if needed"
     else
         echo "❌ .env.example not found. Please create a .env file with your credentials."
         exit 1
     fi
 fi
+
+# Ensure .env has production values for Docker networking
+echo "🔧 Ensuring .env has correct Docker networking configuration..."
+sed -i.bak 's/NODE_ENV=development/NODE_ENV=production/' .env 2>/dev/null || true
+sed -i.bak 's/DB_HOST=localhost/DB_HOST=mysql/' .env 2>/dev/null || true
+sed -i.bak 's/:3307/:3306/g' .env 2>/dev/null || true
+sed -i.bak 's/redis:\/\/localhost:/redis:\/\/redis:/' .env 2>/dev/null || true
+rm -f .env.bak 2>/dev/null || true
 
 # Create logs directory
 mkdir -p logs

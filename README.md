@@ -96,7 +96,22 @@ Kira is an intelligent task management platform designed for agile development t
 ### Mobile Interface
 *[Screenshot placeholder: Mobile-responsive task board optimized for touch interactions]*
 
-## 🚀 Quick Start
+## 🚀 Quick Deployment
+
+### Single-Command Setup
+Deploy Kira on any server with Docker in under 5 minutes:
+
+```bash
+git clone <your-repo-url>
+cd kira
+chmod +x deploy.sh
+./deploy.sh
+```
+
+**Requirements:**
+- **Docker & Docker Compose** installed
+- **Minimum VM**: 1 CPU, 2GB RAM (recommended: 2 CPU, 4GB RAM)
+- **Ports**: 3001 (app) - MySQL and Redis run internally
 
 ### Demo Accounts
 Try Kira with these pre-configured demo accounts:
@@ -106,9 +121,9 @@ Try Kira with these pre-configured demo accounts:
 - **Developer**: `dev@example.com` / `dev123`
 
 ### Access the Application
-1. **Web Interface**: Navigate to your deployed URL
-2. **Slack Integration**: Add the Kira bot to your Slack workspace
-3. **Mobile**: Access via mobile browser for responsive experience
+1. **Web Interface**: http://localhost:3001 (or your server IP)
+2. **Health Check**: http://localhost:3001/health
+3. **Slack Integration**: Add the Kira bot to your Slack workspace
 
 ## 🎮 Getting Started
 
@@ -185,10 +200,10 @@ Try Kira with these pre-configured demo accounts:
 ## 📞 Support & Community
 
 ### Documentation
-- **Setup Guide**: Complete installation and configuration
-- **Architecture Docs**: Technical deep-dive for developers
-- **Slack Guide**: Comprehensive Slack integration documentation
-- **API Reference**: Complete API documentation
+- **[SETUP.md](SETUP.md)**: Complete installation and configuration guide
+- **[SLACK.md](SLACK.md)**: Comprehensive Slack integration documentation
+- **[COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md)**: Architecture and technical details
+- **deploy.sh**: One-command deployment script
 
 ### Getting Help
 - **Troubleshooting**: Common issues and solutions
