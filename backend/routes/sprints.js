@@ -8,11 +8,8 @@ router.get('/', async (req, res) => {
         const sprints = await db.getSprints();
         
         // Add task statistics for each sprint
-        const tasks = await require('../services/dbAdapter').getTasks();
-        const sprintsWithStats = sprints.map(sprint => {
-            const sprintTasks = tasks.filter(task => 
-                task.sprintWeek === sprint.name && task.year === sprint.year
-            );
+        const sprintsWithStats = await Promise.all(sprints.map(async sprint => {
+            const sprintTasks = await db.getTasksBySprint(sprint.name, sprint.year);
             
             const completedTasks = sprintTasks.filter(task => task.status === 'Done');
             const totalPoints = sprintTasks.reduce((sum, task) => sum + (task.sprintPoints || 0), 0);
@@ -29,7 +26,7 @@ router.get('/', async (req, res) => {
                         Math.round((completedTasks.length / sprintTasks.length) * 100) : 0
                 }
             };
-        });
+        }));
         
         res.json({
             success: true,
@@ -58,10 +55,7 @@ router.get('/:id', async (req, res) => {
         }
 
         // Get tasks for this sprint
-        const tasks = await require('../services/dbAdapter').getTasks();
-        const sprintTasks = tasks.filter(task => 
-            task.sprintWeek === sprint.name && task.year === sprint.year
-        );
+        const sprintTasks = await db.getTasksBySprint(sprint.name, sprint.year);
 
         const completedTasks = sprintTasks.filter(task => task.status === 'Done');
         const totalPoints = sprintTasks.reduce((sum, task) => sum + (task.sprintPoints || 0), 0);
@@ -146,10 +140,7 @@ router.get('/:id/burndown', async (req, res) => {
             });
         }
 
-        const tasks = await require('../services/dbAdapter').getTasks();
-        const sprintTasks = tasks.filter(task => 
-            task.sprintWeek === sprint.name && task.year === sprint.year
-        );
+        const sprintTasks = await db.getTasksBySprint(sprint.name, sprint.year);
 
         // Calculate burndown data (simplified version)
         const totalPoints = sprintTasks.reduce((sum, task) => sum + (task.sprintPoints || 0), 0);
@@ -197,10 +188,7 @@ router.get('/active/current', async (req, res) => {
         }
 
         // Get tasks for active sprint
-        const tasks = await require('../services/dbAdapter').getTasks();
-        const sprintTasks = tasks.filter(task => 
-            task.sprintWeek === activeSprint.name && task.year === activeSprint.year
-        );
+        const sprintTasks = await db.getTasksBySprint(activeSprint.name, activeSprint.year);
 
         const completedTasks = sprintTasks.filter(task => task.status === 'Done');
         const totalPoints = sprintTasks.reduce((sum, task) => sum + (task.sprintPoints || 0), 0);

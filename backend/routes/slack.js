@@ -199,8 +199,7 @@ router.post('/notify', authenticateToken, async (req, res) => {
         
         if (taskId && !threadTs) {
             try {
-                const tasks = await db.getTasks();
-                const task = tasks.find(t => t.id === taskId);
+                const task = await db.getTaskById(taskId);
                 if (task && task.slackThreadId) {
                     targetThreadTs = task.slackThreadId;
                     targetChannel = task.slackChannelId || channel;
@@ -437,8 +436,7 @@ router.post('/task-updated', authenticateToken, async (req, res) => {
         
         if (taskId && !threadTs) {
             try {
-                const tasks = await db.getTasks();
-                const task = tasks.find(t => t.id === taskId);
+                const task = await db.getTaskById(taskId);
                 if (task && task.slackThreadId) {
                     targetThreadTs = task.slackThreadId;
                     targetChannel = task.slackChannelId || targetChannel;

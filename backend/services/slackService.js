@@ -194,9 +194,9 @@ class SlackService {
             // Only consider when reaction is in a thread we know or can resolve
             let taskId = this.threadToTaskMap.get(threadTs);
             if (!taskId) {
-                const tasks = await db.getTasks();
-                const linked = tasks.find(t => String(t.slackThreadId) === String(threadTs));
-                if (linked) {
+                const linkedTasks = await db.getTasksWithSlackThread(threadTs);
+                if (linkedTasks.length > 0) {
+                    const linked = linkedTasks[0];
                     taskId = linked.id;
                     this.threadToTaskMap.set(threadTs, taskId);
                     this.threadTimestamps.set(threadTs, Date.now());
@@ -250,9 +250,9 @@ class SlackService {
                 }
                 // Fallback: check Sheets for existing mapping
                 try {
-                    const tasks = await db.getTasks();
-                    const existing = tasks.find(t => String(t.slackThreadId) === String(event.thread_ts));
-                    if (existing) {
+                    const linkedTasks = await db.getTasksWithSlackThread(event.thread_ts);
+                    if (linkedTasks.length > 0) {
+                        const existing = linkedTasks[0];
                         this.threadToTaskMap.set(event.thread_ts, existing.id);
                         this.threadTimestamps.set(event.thread_ts, Date.now());
                         await client.chat.postMessage({
@@ -506,9 +506,9 @@ class SlackService {
             // Fallback: lookup task by slackThreadId in DB if not in memory
             if (!resolvedTaskId) {
                 try {
-                    const tasks = await db.getTasks();
-                    const linkedTask = tasks.find(t => String(t.slackThreadId) === String(event.thread_ts));
-                    if (linkedTask) {
+                    const linkedTasks = await db.getTasksWithSlackThread(event.thread_ts);
+                    if (linkedTasks.length > 0) {
+                        const linkedTask = linkedTasks[0];
                         resolvedTaskId = linkedTask.id;
                         this.threadToTaskMap.set(event.thread_ts, linkedTask.id);
                         this.threadTimestamps.set(event.thread_ts, Date.now());
@@ -823,7 +823,6 @@ class SlackService {
 
     async handleStatusCommand(args, respond) {
         try {
-            const tasks = await db.getTasks();
             const sprints = await db.getSprints();
             
             const activeSprint = sprints.find(s => s.status === 'Active');
@@ -834,7 +833,7 @@ class SlackService {
                 });
             }
 
-            const sprintTasks = tasks.filter(t => t.sprintWeek === activeSprint.name);
+            const sprintTasks = await db.getTasksBySprint(activeSprint.name, activeSprint.year);
             const stats = this.calculateSprintStats(sprintTasks);
             
             const statusText = `📊 *Sprint Status - ${activeSprint.name}*\n\n` +
@@ -864,11 +863,7 @@ class SlackService {
             if (!query) {
                 return respond({ text: 'Usage: /kira find <text>', response_type: 'ephemeral' });
             }
-            const tasks = await db.getTasks();
-            const results = tasks.filter(t =>
-                (t.task || '').toLowerCase().includes(query) ||
-                (t.description || '').toLowerCase().includes(query)
-            ).slice(0, 10);
+            const results = await db.searchTasks(query, 10);
             if (results.length === 0) {
                 return respond({ text: 'No tasks found.', response_type: 'ephemeral' });
             }
@@ -881,10 +876,10 @@ class SlackService {
         try {
             const user = await this.getUserBySlackId(userId);
             if (!user || !user.email) return respond({ text: 'User not mapped to email.', response_type: 'ephemeral' });
-            const tasks = await db.getTasks();
-            const mine = tasks.filter(t => (t.assignedTo || '').includes(user.email)).slice(0, 10);
-            if (mine.length === 0) return respond({ text: 'No assigned tasks.', response_type: 'ephemeral' });
-            const lines = mine.map(t => `• ${t.id}: ${t.task} [${t.status}]`).join('\n');
+            const myTasks = await db.getTasksByUser(user.email);
+            const tasksToShow = myTasks.slice(0, 10);
+            if (myTasks.length === 0) return respond({ text: 'No assigned tasks.', response_type: 'ephemeral' });
+            const lines = tasksToShow.map(t => `• ${t.id}: ${t.task} [${t.status}]`).join('\n');
             respond({ text: `Your tasks:\n${lines}`, response_type: 'ephemeral' });
         } catch (e) { respond({ text: 'Error fetching tasks.', response_type: 'ephemeral' }); }
     }

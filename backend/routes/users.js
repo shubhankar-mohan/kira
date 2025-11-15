@@ -129,10 +129,7 @@ router.get('/:id/tasks', async (req, res) => {
             });
         }
 
-        const tasks = await db.getTasks();
-        const userTasks = tasks.filter(task => 
-            task.assignedTo && task.assignedTo.includes(user.email)
-        );
+        const userTasks = await db.getTasksByUser(user.email);
 
         const stats = {
             total: userTasks.length,

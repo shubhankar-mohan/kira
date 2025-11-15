@@ -62,15 +62,7 @@ router.get('/', async (req, res) => {
 // Get single task by ID
 router.get('/:id', async (req, res) => {
     try {
-        // Support lookup by shortId pattern kira-XXXXXX
-        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
-        let task = null;
-        const tasks = await db.getTasks();
-        if (isShort) {
-            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
-        } else {
-            task = tasks.find(t => t.id === req.params.id);
-        }
+        const task = await db.getTaskById(req.params.id);
         
         if (!task) {
             return res.status(404).json({ 
@@ -184,15 +176,7 @@ router.put('/:id', async (req, res) => {
             type: mapTypeToEnum(req.body.type)
         };
         
-        // Support lookup by shortId pattern kira-XXXXXX
-        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
-        let task = null;
-        const tasks = await db.getTasks();
-        if (isShort) {
-            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
-        } else {
-            task = tasks.find(t => t.id === req.params.id);
-        }
+        const task = await db.getTaskById(req.params.id);
         
         if (!task) {
             return res.status(404).json({ 
@@ -238,15 +222,7 @@ router.put('/:id', async (req, res) => {
 // Delete task
 router.delete('/:id', async (req, res) => {
     try {
-        // Support lookup by shortId pattern kira-XXXXXX
-        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
-        let task = null;
-        const tasks = await db.getTasks();
-        if (isShort) {
-            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
-        } else {
-            task = tasks.find(t => t.id === req.params.id);
-        }
+        const task = await db.getTaskById(req.params.id);
         
         if (!task) {
             return res.status(404).json({ 
@@ -287,16 +263,7 @@ router.post('/:id/comments', async (req, res) => {
             });
         }
 
-        const tasks = await db.getTasks();
-        
-        // Support lookup by shortId pattern kira-XXXXXX
-        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
-        let task = null;
-        if (isShort) {
-            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
-        } else {
-            task = tasks.find(t => t.id === req.params.id);
-        }
+        const task = await db.getTaskById(req.params.id);
         
         if (!task) {
             return res.status(404).json({ 
@@ -370,15 +337,7 @@ router.post('/:id/comments', async (req, res) => {
 // List comments for a task
 router.get('/:id/comments', async (req, res) => {
     try {
-        // Support lookup by shortId pattern kira-XXXXXX
-        const isShort = /^kira-\d{1,10}$/i.test(req.params.id);
-        let task = null;
-        const tasks = await db.getTasks();
-        if (isShort) {
-            task = tasks.find(t => (t.shortId || '').toLowerCase() === req.params.id.toLowerCase());
-        } else {
-            task = tasks.find(t => t.id === req.params.id);
-        }
+        const task = await db.getTaskById(req.params.id);
         
         if (!task) {
             return res.status(404).json({ 
