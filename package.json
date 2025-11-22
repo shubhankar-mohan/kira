@@ -1,0 +1,39 @@
+{
+  "name": "kirana-task-manager",
+  "version": "1.0.0",
+  "description": "KiranaClub Task Management System with Google Sheets Integration",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "cd backend && npm start",
+    "dev": "cd backend && npm run dev",
+    "install-backend": "cd backend && npm install",
+    "setup": "npm run install-backend",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "task-management",
+    "google-sheets",
+    "nodejs",
+    "express",
+    "kirana-club"
+  ],
+  "author": "KiranaClub Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@slack/bolt": "^4.4.0",
+    "@slack/web-api": "^7.9.3",
+    "axios": "^1.11.0",
+    "crypto": "^1.0.1",
+    "express-rate-limit": "^8.0.1",
+    "node-cron": "^4.2.1",
+    "serve": "^14.2.4"
+
+  }
+}
