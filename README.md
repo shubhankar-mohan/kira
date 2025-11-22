@@ -502,6 +502,26 @@ We welcome contributions! Areas where we need help:
 [//]: # (A: Kira is open-source and free for self-hosting. We also offer managed cloud hosting with enterprise support for teams that prefer not to manage infrastructure.)
 
 ### Troubleshooting
+
+#### Docker Compose Container Config Error
+**Error**: `ERROR: for kira-redis 'ContainerConfig'` or `KeyError: 'ContainerConfig'`
+
+**Solution**:
+```bash
+# Stop all containers and clean up
+docker-compose down --volumes --remove-orphans
+
+# Remove any corrupted containers and images
+docker system prune -f
+
+# Pull fresh images and restart
+docker-compose pull
+docker-compose up -d
+```
+
+**Root Cause**: This occurs when Docker containers have corrupted state or when the Docker daemon has issues accessing container configurations. The cleanup process removes all containers, volumes, and cached data to ensure a fresh start.
+
+#### Other Common Issues
 - **Slack Integration Issues**: Check bot permissions and workspace settings
 - **Performance Problems**: Review server resources and database optimization
 - **Login/Authentication**: Verify JWT configuration and user permissions

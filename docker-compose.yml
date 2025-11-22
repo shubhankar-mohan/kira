@@ -7,7 +7,23 @@ services:
       - MYSQL_DATABASE=${DB_NAME}
       - MYSQL_USER=${DB_USER}
       - MYSQL_PASSWORD=${DB_PASSWORD}
-    command: --default-authentication-plugin=mysql_native_password
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=128M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --table-open-cache=200
+      --sort-buffer-size=512K
+      --net-buffer-length=8K
+      --read-buffer-size=256K
+      --read-rnd-buffer-size=512K
+      --myisam-sort-buffer-size=8M
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 200M
     volumes:
       - ./data/mysql:/var/lib/mysql
       - ./database/init:/docker-entrypoint-initdb.d:ro
