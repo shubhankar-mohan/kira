@@ -13,13 +13,22 @@ Your team lives in Slack, but your tasks live everywhere else. The result? Const
 - Standups are chaotic scrolling sessions through Slack history
 - Constant switching between Slack and project management tools
 
+### Built for Cash-Strapped Startups 💰
+Every early-stage team faces the same dilemma: **Slack lists have zero visibility, but proper tools costs too much to justify.**
+
+- **Jira/Linear**: ~\$8/user/month → ~$40/month for 5-person team (₹3,300/month)
+- **Kira**: ₹1,000/month total for unlimited users (self-hosted)
+
+**Why we built Kira**: As ones leading a startup engineering vertical, we couldn't justify spending our development budget on expensive task management tools, but Slack lists and spreadsheets were killing our productivity. Kira gives you enterprise-level task management at the cost of a basic VPS - money that can go toward building your product instead of managing it.
+
 ### The Magic Moment ✨
 **Before Kira:**
 ```
 Developer: "The login is broken on mobile"
-PM: "Can you create a ticket for that?"
-Developer: "Sure..." 
-*Creates mental note, forgets, ships bugs to production*
+PM: "I'll add it to our Slack list"
+*Gets buried under other messages*
+*Team loses visibility, task forgotten*
+*Bug ships to production*
 ```
 
 **With Kira:**
