@@ -744,6 +744,20 @@ body {
     background: var(--primary);
 }
 
+.stat-card.current-sprint .stat-icon {
+    font-size: 14px;
+    margin-bottom: 2px;
+    display: block;
+}
+
+.stat-card.current-sprint .stat-number {
+    font-size: var(--text-lg);
+    font-weight: var(--font-bold);
+    color: var(--gray-900);
+    margin-bottom: 1px;
+    line-height: 1.1;
+}
+
 .stat-icon {
     font-size: 24px;
     margin-bottom: 12px;
@@ -759,6 +773,21 @@ body {
 .stat-number span:last-child {
     font-size: var(--text-lg);
     color: var(--gray-500);
+}
+
+.stat-card.current-sprint .stat-label {
+    font-size: var(--text-xs);
+    font-weight: var(--font-semibold);
+    color: var(--gray-700);
+    margin-bottom: 0;
+    line-height: 1.2;
+}
+
+.stat-card.current-sprint .stat-description {
+    font-size: 10px;
+    color: var(--gray-500);
+    line-height: 1.1;
+    margin: 0;
 }
 
 .stat-label {
@@ -2743,23 +2772,52 @@ body {
 /* ===== CURRENT SPRINT STATS GRID ===== */
 .current-sprint-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+/* Responsive layout for smaller screens */
+@media (max-width: 1200px) {
+    .current-sprint-stats {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+    }
+}
+
+@media (max-width: 768px) {
+    .current-sprint-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
 }
 
 .stat-card.current-sprint {
     background: var(--white);
-    border: 2px solid var(--primary);
-    border-radius: 12px;
-    padding: 24px;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: 8px 12px;
     text-align: center;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
+    position: relative;
+    min-height: auto;
+}
+
+.stat-card.current-sprint::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--primary);
+    border-radius: 6px 6px 0 0;
 }
 
 .stat-card.current-sprint:hover {
-    border-color: var(--secondary);
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
-    transform: translateY(-2px);
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
+    transform: translateY(-0.5px);
 }
 
 /* ===== BOARD SECTION HEADER WITH NEW TASK BUTTON ===== */

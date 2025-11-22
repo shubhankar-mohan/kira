@@ -4,14 +4,6 @@
 
 Kira's Slack integration transforms your development workflow by bringing task management directly into Slack. Create tasks, manage sprints, and get automated reports without leaving your team's communication hub.
 
-## 🎯 Key Benefits
-
-- **50% reduction** in context switching between tools
-- **Automated scrum master** functionality with intelligent reporting
-- **Real-time task synchronization** between Slack and project boards
-- **Advanced analytics** for sprint health and team performance
-- **Enterprise-grade security** with request verification
-
 ## ✨ Core Slack Features
 
 ### 🎯 @kira Mention Task Creation
@@ -572,39 +564,35 @@ Create dedicated channels for different purposes:
 - **Sprint Planning**: Use Slack for collaborative sprint planning
 - **Retrospectives**: Gather feedback through Slack integration
 
-## 🔮 Future Enhancements
+[//]: # (## 🔮 Future Enhancements)
 
-### Planned Features (v2.0)
-- [ ] AI-powered task estimation and assignment
-- [ ] Predictive sprint planning with machine learning
-- [ ] GitHub integration for code review automation
-- [ ] Advanced analytics dashboard with custom metrics
-- [ ] Multi-workspace Slack support
-- [ ] Voice commands for task creation
+[//]: # ()
+[//]: # (### Planned Features &#40;v2.0&#41;)
 
-### Integration Opportunities
-- [ ] Jira synchronization for enterprise workflows
-- [ ] GitHub Actions integration for CI/CD automation
-- [ ] Calendar synchronization for sprint planning
-- [ ] Time tracking integration for accurate estimates
-- [ ] Video call scheduling for remote team coordination
+[//]: # (- [ ] AI-powered task estimation and assignment)
 
-## 📞 Support & Maintenance
+[//]: # (- [ ] Predictive sprint planning with machine learning)
 
-### Regular Maintenance Tasks
-1. **Weekly**: Review error logs and performance metrics
-2. **Monthly**: Update dependencies and security patches
-3. **Quarterly**: Rotate authentication tokens
-4. **Annually**: Review and update security policies
+[//]: # (- [ ] GitHub integration for code review automation)
 
-### Support Channels
-- **Documentation**: This guide and inline code comments
-- **Troubleshooting**: Health check endpoints and logs
-- **Updates**: Version control and deployment guides
+[//]: # (- [ ] Advanced analytics dashboard with custom metrics)
 
-### Contact Information
-For questions or issues regarding Slack integration:
-**Shubhankar Mohan** - Project Creator and Lead Developer
+[//]: # (- [ ] Multi-workspace Slack support)
+
+[//]: # (- [ ] Voice commands for task creation)
+
+[//]: # ()
+[//]: # (### Integration Opportunities)
+
+[//]: # (- [ ] Jira synchronization for enterprise workflows)
+
+[//]: # (- [ ] GitHub Actions integration for CI/CD automation)
+
+[//]: # (- [ ] Calendar synchronization for sprint planning)
+
+[//]: # (- [ ] Time tracking integration for accurate estimates)
+
+[//]: # (- [ ] Video call scheduling for remote team coordination)
 
 ---
 

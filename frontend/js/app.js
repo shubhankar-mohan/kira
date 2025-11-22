@@ -695,7 +695,7 @@ class App {
                     
                     // Only show badge for Slack comments (hide for web/dashboard)
                     const sourceBadge = comment.source && comment.source.toLowerCase() === 'slack' 
-                        ? '<span class="comment-source slack">Slack</span>' 
+                        ? '<span class="comment-source slack">🔗 Slack</span>' 
                         : '';
                     
                     // Format timestamp

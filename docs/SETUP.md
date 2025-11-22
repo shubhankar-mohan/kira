@@ -290,7 +290,7 @@ sudo systemctl enable redis-server
 redis-cli ping
 ```
 
-## 📊 Google Sheets API Setup (Legacy Support)
+## 📊 Google Sheets API Setup
 
 ### Step 1: Create Google Cloud Project
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
@@ -657,15 +657,22 @@ docker-compose exec redis redis-cli INFO memory
 - **Slack Integration**: See `SLACK.md`
 - **API Reference**: Available at `/api/docs` (when implemented)
 
-### Support
-- **GitHub Issues**: Report bugs and feature requests
-- **Community**: Connect with other Kira users
-- **Documentation**: Comprehensive guides and tutorials
+[//]: # (### Support)
 
-### Updates
-- **Version Control**: Track changes and updates
-- **Migration Guides**: Database and configuration updates
-- **Security Updates**: Regular security patches and updates
+[//]: # (- **GitHub Issues**: Report bugs and feature requests)
+
+[//]: # (- **Community**: Connect with other Kira users)
+
+[//]: # (- **Documentation**: Comprehensive guides and tutorials)
+
+[//]: # ()
+[//]: # (### Updates)
+
+[//]: # (- **Version Control**: Track changes and updates)
+
+[//]: # (- **Migration Guides**: Database and configuration updates)
+
+[//]: # (- **Security Updates**: Regular security patches and updates)
 
 ---
 

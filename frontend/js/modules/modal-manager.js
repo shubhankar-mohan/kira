@@ -1587,7 +1587,9 @@ class ModalManager {
             const comments = Array.isArray(res.data) ? res.data : [];
             const render = (c) => {
                 const avatar = (c.user || 'U').charAt(0).toUpperCase();
-                const sourceBadge = c.source === 'slack' ? '<span class="comment-source slack">Slack</span>' : '<span class="comment-source web">Dashboard</span>';
+                const sourceBadge = c.source && c.source.toLowerCase() === 'slack' 
+                    ? '<span class="comment-source slack">🔗 Slack</span>' 
+                    : '<span class="comment-source web">💻 Web</span>';
                 const timeText = c.timestamp || '';
                 return `
                     <div class="task-activity-item">
