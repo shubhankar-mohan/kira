@@ -9,6 +9,9 @@
     "prisma:generate": "prisma generate --schema=backend/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate deploy --schema=backend/prisma/schema.prisma",
     "prisma:seed": "node backend/prisma/seed.js",
+    "clean": "rm -rf node_modules/.prisma && npm run prisma:generate",
+    "fix-permissions": "chmod -R 755 node_modules 2>/dev/null || true",
+    "setup": "./start.sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

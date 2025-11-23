@@ -1,5 +1,18 @@
-const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
+const esmLoader = require('../utils/esmLoader');
+
+// Robust ESM loading with fallback support
+let GoogleSpreadsheet;
+
+async function loadGoogleSpreadsheet() {
+    if (!GoogleSpreadsheet) {
+        GoogleSpreadsheet = await esmLoader.loadModule('google-spreadsheet', {
+            exportName: 'GoogleSpreadsheet',
+            fallbackVersion: '4.1.5'
+        });
+    }
+    return GoogleSpreadsheet;
+}
 
 class GoogleSheetsService {
     constructor() {
@@ -14,6 +27,9 @@ class GoogleSheetsService {
         if (this.isInitialized) return;
 
         try {
+            // Load GoogleSpreadsheet dynamically
+            const GSClass = await loadGoogleSpreadsheet();
+            
             // Create JWT auth instance
             const serviceAccountAuth = new JWT({
                 email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
@@ -25,7 +41,7 @@ class GoogleSheetsService {
             });
 
             // Initialize the spreadsheet
-            this.doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEETS_SPREADSHEET_ID, serviceAccountAuth);
+            this.doc = new GSClass(process.env.GOOGLE_SHEETS_SPREADSHEET_ID, serviceAccountAuth);
             await this.doc.loadInfo();
 
             console.log(`📊 Connected to Google Sheet: ${this.doc.title}`);

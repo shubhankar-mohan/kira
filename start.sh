@@ -5,6 +5,19 @@
 echo "🏪 Starting Kira Task Manager..."
 echo "🔄 Single server mode: Backend serves frontend on port 3001"
 
+# Run startup validation if script exists
+if [ -f "scripts/validate-startup.js" ]; then
+    echo "🔍 Running startup validation..."
+    if ! node scripts/validate-startup.js; then
+        echo "❌ Startup validation found critical issues. Please fix them before continuing."
+        read -p "Continue anyway? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    fi
+fi
+
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
     echo "❌ Node.js is not installed. Please install Node.js 18+ first."
@@ -65,6 +78,16 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
+# Fix permissions if node_modules exists but has root ownership
+if [ -d "node_modules" ] && [ "$(stat -f '%Su' node_modules 2>/dev/null || stat -c '%U' node_modules 2>/dev/null)" = "root" ]; then
+    echo "🔧 Fixing node_modules permissions..."
+    if command -v sudo &> /dev/null && [ "$EUID" -ne 0 ]; then
+        sudo chown -R $(id -u):$(id -g) node_modules || {
+            echo "⚠️  Could not fix node_modules permissions. You may need to run: sudo chown -R $(id -u):$(id -g) node_modules"
+        }
+    fi
+fi
+
 # Ensure backend/.env exists with DB defaults if missing
 if [ ! -f "backend/.env" ]; then
     echo "⚠️  backend/.env not found. Creating with database defaults..."
@@ -88,6 +111,15 @@ CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED WITH mysql_native_password
 GRANT ALL PRIVILEGES ON *.* TO '${DB_USER}'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 " 2>/dev/null || true
+
+# Clean up any corrupted Prisma client files (with proper permissions)
+if [ -d "node_modules/.prisma" ]; then
+    echo "🔄 Cleaning up Prisma client..."
+    rm -rf node_modules/.prisma 2>/dev/null || {
+        echo "⚠️  Could not clean Prisma client (permission issue). Attempting force clean..."
+        sudo rm -rf node_modules/.prisma 2>/dev/null || true
+    }
+fi
 
 # Prisma generate, migrate, and seed (safe to re-run)
 echo "🧬 Generating Prisma client..."
