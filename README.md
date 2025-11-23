@@ -249,25 +249,44 @@ Experience Kira's powerful features through real-world scenarios with authentic 
 
 ### Try Kira Right Now (2 Minutes) ⚡
 
-**Option 1: Instant Demo**
+**Fresh VM Setup (Recommended)**
+```bash
+# 1. Run pre-flight check first
+curl -sSL https://raw.githubusercontent.com/shubhankar-mohan/kira/main/scripts/vm-preflight.sh | bash
+
+# 2. If pre-flight passes, install Kira
+git clone https://github.com/shubhankar-mohan/kira.git
+cd kira
+chmod +x start.sh
+./start.sh
+# Live at http://localhost:3001 in under 3 minutes
+```
+
+**Option 1: Local Development**
+```bash
+git clone https://github.com/shubhankar-mohan/kira.git
+cd kira
+chmod +x start.sh
+./start.sh
+```
+
+**Option 2: Docker Deployment**
 ```bash
 git clone https://github.com/shubhankar-mohan/kira.git
 cd kira
 chmod +x deploy.sh
 ./deploy.sh
-# Live at http://localhost:3001 in under 3 minutes
+# Access at http://localhost:3001
 ```
 
-**Option 2: Docker Deployment**
-```bash
-docker-compose up -d
-# Access at http://your-server:3001
-```
-
-**Requirements:**
-- **Docker & Docker Compose** installed
+**VM Requirements:**
+- **OS**: Ubuntu 22.04+ or similar Linux distribution
+- **Node.js**: v18.x (v24 has compatibility issues)
+- **Docker & Docker Compose**: Latest versions
 - **Minimum VM**: 1 CPU, 2GB RAM (recommended: 2 CPU, 4GB RAM)
-- **Ports**: 3001 (app) - MySQL and Redis run internally
+- **Disk Space**: 2GB+ available
+- **Ports**: 3001 (app), 3307 (MySQL), 6379 (Redis)
+- **Network**: Internet access for package downloads
 
 ### Demo Accounts
 Try Kira with these pre-configured accounts:
@@ -520,6 +539,20 @@ docker-compose up -d
 ```
 
 **Root Cause**: This occurs when Docker containers have corrupted state or when the Docker daemon has issues accessing container configurations. The cleanup process removes all containers, volumes, and cached data to ensure a fresh start.
+
+#### Node.js Version Issues
+**Error**: `P1017: Server has closed the connection` or Prisma schema engine errors
+
+**Solution**: Use Node.js 18.x instead of Node.js 24.x
+```bash
+# Install Node 18 via NVM
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+source ~/.nvm/nvm.sh
+nvm install 18
+nvm use 18
+```
+
+**Root Cause**: Prisma schema engine has compatibility issues with Node.js 24.x. Node.js 18.x is the recommended version.
 
 #### Other Common Issues
 - **Slack Integration Issues**: Check bot permissions and workspace settings

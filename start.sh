@@ -43,7 +43,7 @@ export DB_HOST=${DB_HOST:-localhost}
 export DB_PORT=${DB_PORT:-3307}
 export DB_NAME=${DB_NAME:-kira_db}
 export DB_USER=${DB_USER:-kira_user}
-export DB_PASSWORD=${DB_PASSWORD:-change_me}
+export DB_PASSWORD=${DB_PASSWORD:-change_me_secure_password}
 export DATABASE_URL=${DATABASE_URL:-mysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}}
 
 # Wait for MySQL to be reachable (up to ~60s)
@@ -59,19 +59,16 @@ until (echo > /dev/tcp/${DB_HOST}/${DB_PORT}) >/dev/null 2>&1; do
 done
 echo "✅ MySQL reachable."
 
-# Navigate to backend directory
-cd backend
-
-# Check if dependencies are installed
+# Check if dependencies are installed (from root)
 if [ ! -d "node_modules" ]; then
-    echo "📦 Installing backend dependencies..."
+    echo "📦 Installing dependencies..."
     npm install
 fi
 
-# Ensure .env exists with DB defaults if missing
-if [ ! -f ".env" ]; then
-    echo "⚠️  .env not found. Creating with database defaults..."
-    cat > .env <<EOF
+# Ensure backend/.env exists with DB defaults if missing
+if [ ! -f "backend/.env" ]; then
+    echo "⚠️  backend/.env not found. Creating with database defaults..."
+    cat > backend/.env <<EOF
 DB_TYPE=${DB_TYPE}
 DB_HOST=${DB_HOST}
 DB_PORT=${DB_PORT}
@@ -84,14 +81,25 @@ JWT_SECRET=${JWT_SECRET:-kira-dev-secret}
 EOF
 fi
 
+# Setup MySQL user with proper permissions (first run only)
+echo "🔧 Ensuring MySQL user has proper permissions..."
+docker exec kira-mysql mysql -uroot -p${MYSQL_ROOT_PASSWORD:-root_secure_password} -e "
+CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED WITH mysql_native_password BY '${DB_PASSWORD}';
+GRANT ALL PRIVILEGES ON *.* TO '${DB_USER}'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+" 2>/dev/null || true
+
 # Prisma generate, migrate, and seed (safe to re-run)
 echo "🧬 Generating Prisma client..."
-npx prisma generate >/dev/null 2>&1 || npx prisma generate
+npm run prisma:generate >/dev/null 2>&1 || npm run prisma:generate
 
 echo "🗃️  Running Prisma migrations..."
 if ! npm run prisma:migrate; then
-    echo "⚠️  Prisma migrate failed. Falling back to schema sync (db push)..."
-    npx prisma db push || true
+    echo "⚠️  Prisma migrate failed. Trying manual table setup..."
+    node scripts/setup-tables.js 2>/dev/null || {
+        echo "⚠️  Manual setup also failed. Falling back to schema sync (db push)..."
+        npx prisma db push --schema=backend/prisma/schema.prisma || true
+    }
 fi
 
 echo "🌱 Seeding database (demo users, baseline data)..."
